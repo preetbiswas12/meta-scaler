@@ -160,7 +160,12 @@ class EmailTriageGrader:
         difficulty: str = "easy",
     ) -> Tuple[float, Dict[str, Any]]:
         """
-        Grade an action for email triage.
+        Grade an action for email triage with ambiguity awareness.
+
+        Handles:
+        - Standard emails: Reward correct classification with confidence
+        - Ambiguous emails: Reward conservative/cautious approaches
+        - Multi-action chains: Reward investigation before escalation
 
         Args:
             action: ActionSchema object with action_type and confidence
@@ -182,22 +187,42 @@ class EmailTriageGrader:
         # Normalize confidence
         confidence = max(0.0, min(1.0, confidence))
         
+        # Get ambiguity level (default to "low" if not specified)
+        ambiguity = ground_truth.get("ambiguity", "low")
+        
         # Check if action is correct
         is_correct = False
         quality = "low_confidence"
+        ambiguity_bonus = 0.0  # Bonus for handling ambiguity well
         
         if action_type == "classify":
             # Classification should match ground truth category
             is_correct = target_category == ground_truth.get("category", "")
+            
+            # For highly ambiguous emails, reward appropriate uncertainty
+            if ambiguity == "high":
+                if confidence <= 0.5:
+                    # Appropriately cautious on ambiguous classification
+                    ambiguity_bonus = 0.05
+                elif confidence > 0.8 and not is_correct:
+                    # Overconfident on ambiguous email - penalty already applied
+                    ambiguity_bonus = -0.05
+            
             if confidence > 0.8:
                 quality = "perfect" if is_correct else "incorrect"
             elif confidence > 0.6:
                 quality = "correct" if is_correct else "low_confidence"
             else:
-                quality = "low_confidence"
+                quality = "appropriately_cautious" if ambiguity in ["medium", "high"] else "low_confidence"
         else:
-            # Other actions - reward for confidence
+            # Other actions (prioritize, escalate, reply, investigate)
             is_correct = is_correct_sequence
+            
+            # Reward investigation/escalation on ambiguous emails
+            if ambiguity in ["medium", "high"]:
+                if action_type in ["investigate", "escalate"]:
+                    ambiguity_bonus = 0.05  # Bonus for conservative approach
+            
             if confidence > 0.8:
                 quality = "perfect"
             elif confidence > 0.6:
@@ -223,6 +248,9 @@ class EmailTriageGrader:
             
             # Compute reward
             reward = step_weight * quality_multiplier
+            
+            # Apply ambiguity bonus
+            reward += ambiguity_bonus
         
         # Ensure bounds
         reward = max(0.0, min(1.0, reward))
@@ -232,6 +260,8 @@ class EmailTriageGrader:
                 "quality": quality,
                 "is_correct": is_correct,
                 "confidence": confidence,
+                "ambiguity": ambiguity,
+                "ambiguity_bonus": ambiguity_bonus,
             },
             "step": step_number,
             "total_steps": total_steps,

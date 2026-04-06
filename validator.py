@@ -3,12 +3,12 @@
 Validator script for EmailTriageEnv submission.
 
 Checks:
-✓ OpenEnv API compliance
-✓ Docker build
-✓ HF Space deployment (if URL provided)
-✓ Logging format
-✓ Reward bounds
-✓ Integration tests
+[+] OpenEnv API compliance
+[+] Docker build
+[+] HF Space deployment (if URL provided)
+[+] Logging format
+[+] Reward bounds
+[+] Integration tests
 """
 
 import os
@@ -34,7 +34,7 @@ class Validator:
     
     def check(self, name: str, condition: bool, error: str = "") -> bool:
         """Record a check result."""
-        status = "✓" if condition else "✗"
+        status = "[+]" if condition else "[-]"
         color = GREEN if condition else RED
         
         msg = f"{color}{status}{RESET} {name}"
@@ -59,15 +59,14 @@ class Validator:
         print(f"\n{BLUE}{'='*70}{RESET}")
         print(f"{BLUE}VALIDATION SUMMARY{RESET}")
         print(f"{BLUE}{'='*70}{RESET}\n")
-        
         color = GREEN if passed == total else RED
         print(f"{color}{passed}/{total} checks passed{RESET}\n")
         
         if passed == total:
-            print(f"{GREEN}✓ All validations passed! Ready for submission.{RESET}\n")
+            print(f"{GREEN}[+] All validations passed! Ready for submission.{RESET}\n")
             return True
         else:
-            print(f"{RED}✗ Some validations failed. See details above.{RESET}\n")
+            print(f"{RED}[-] Some validations failed. See details above.{RESET}\n")
             return False
 
 
@@ -215,7 +214,7 @@ def test_docker_build():
     
     try:
         # Try to build Docker image (might fail in some environments)
-        print(f"{YELLOW}→ Building Docker image (this may take a few minutes)...{RESET}")
+        print(f"{YELLOW}-> Building Docker image (this may take a few minutes)...{RESET}")
         result = subprocess.run(
             ["docker", "build", "-t", "email-triage-env:test", "."],
             capture_output=True,
@@ -230,11 +229,11 @@ def test_docker_build():
             validator.check("Docker build succeeds", False, error[:200])
     
     except FileNotFoundError:
-        print(f"{YELLOW}⚠ Docker not installed - skipping Docker build test{RESET}")
+        print(f"{YELLOW}[!] Docker not installed - skipping Docker build test{RESET}")
     except subprocess.TimeoutExpired:
         validator.check("Docker build succeeds", False, "Build timeout")
     except Exception as e:
-        print(f"{YELLOW}⚠ Docker test skipped: {e}{RESET}")
+        print(f"{YELLOW}[!] Docker test skipped: {e}{RESET}")
     
     return validator
 
@@ -245,7 +244,7 @@ def test_hf_space():
     validator.section("5. HUGGING FACE SPACE VALIDATION")
     
     if not validator.hf_space_url:
-        print(f"{YELLOW}⚠ HF_SPACE_URL not set - skipping HF Space tests{RESET}")
+        print(f"{YELLOW}[!] HF_SPACE_URL not set - skipping HF Space tests{RESET}")
         return validator
     
     print(f"Testing HF Space: {validator.hf_space_url}\n")
@@ -297,10 +296,10 @@ def test_hf_space():
             )
     
     except requests.exceptions.ConnectionError:
-        print(f"{RED}✗ Cannot connect to HF Space{RESET}")
-        print(f"{YELLOW}→ Make sure your HF Space is deployed at: {validator.hf_space_url}{RESET}")
+        print(f"{RED}[-] Cannot connect to HF Space{RESET}")
+        print(f"{YELLOW}-> Make sure your HF Space is deployed at: {validator.hf_space_url}{RESET}")
     except Exception as e:
-        print(f"{YELLOW}⚠ HF Space test error: {e}{RESET}")
+        print(f"{YELLOW}[!] HF Space test error: {e}{RESET}")
     
     return validator
 
@@ -318,7 +317,7 @@ def main():
     if v:
         validators.append(v)
     else:
-        print(f"{RED}✗ Import validation failed - cannot continue{RESET}")
+        print(f"{RED}[-] Import validation failed - cannot continue{RESET}")
         return False
     
     v = test_environment()
@@ -347,11 +346,11 @@ def main():
     
     if total_passed == total_checks:
         print(f"{GREEN}{total_passed}/{total_checks} validations passed{RESET}")
-        print(f"{GREEN}✓ Your submission is ready!{RESET}\n")
+        print(f"{GREEN}[+] Your submission is ready!{RESET}\n")
         return True
     else:
         print(f"{RED}{total_passed}/{total_checks} validations passed{RESET}")
-        print(f"{RED}✗ Please fix the failures above.{RESET}\n")
+        print(f"{RED}[-] Please fix the failures above.{RESET}\n")
         return False
 
 

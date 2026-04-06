@@ -63,9 +63,16 @@ class EmailTriageEnv:
         self.email_bank = self._create_email_bank()
 
     def _create_email_bank(self) -> Dict[str, List[Dict[str, Any]]]:
-        """Create a bank of sample emails for different difficulties."""
+        """Create a bank of sample emails for different difficulties.
+        
+        Includes messy real-world variants with:
+        - Ambiguous intent (unclear classification)
+        - Multiple actions (chain of steps required)
+        - Conflicting signals (priority vs urgency mismatch)
+        """
         return {
             "easy": [
+                # Primary: straightforward newsletter
                 {
                     "email_id": "email_001",
                     "sender": "newsletter@company.com",
@@ -75,8 +82,29 @@ class EmailTriageEnv:
                     "is_spam": False,
                     "urgency_indicators": [],
                 },
+                # Messy variant 1: Ambiguous - could be newsletter or promo
+                {
+                    "email_id": "email_001_messy_1",
+                    "sender": "updates@partner.io",
+                    "subject": "Check out what's new",
+                    "body": "We have new features! Learn more at our site. Special offer inside.",
+                    "timestamp": "2024-01-16T09:00:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": [],
+                },
+                # Messy variant 2: Conflicting signals - spam-like but low urgency
+                {
+                    "email_id": "email_001_messy_2",
+                    "sender": "info@newsletters.org",
+                    "subject": "!!!IMPORTANT UPDATES!!!",
+                    "body": "Check our latest posts. You might miss something. Click here now!!!",
+                    "timestamp": "2024-01-16T10:30:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": [],
+                },
             ],
             "medium": [
+                # Primary: clear bug report with urgency
                 {
                     "email_id": "email_002",
                     "sender": "customer@example.com",
@@ -86,8 +114,39 @@ class EmailTriageEnv:
                     "is_spam": False,
                     "urgency_indicators": ["urgent"],
                 },
+                # Messy variant 1: Ambiguous - feature request or complaint?
+                {
+                    "email_id": "email_002_messy_1",
+                    "sender": "john.doe@corporate.com",
+                    "subject": "Question about the system",
+                    "body": "Hi, when I use the report feature with my 500K records, it seems slow. Is this normal? Other tools do it faster. Wondering if there's a way to optimize?",
+                    "timestamp": "2024-01-15T15:00:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["performance_issue"],
+                },
+                # Messy variant 2: Conflicting signals - unclear sender importance
+                {
+                    "email_id": "email_002_messy_2",
+                    "sender": "support-bot+urgent@vendor.com",
+                    "subject": "URGENT: Review needed on invoice",
+                    "body": "We need someone from accounting to review this. It got marked urgent by mistake but we need it ASAP anyway. Invoice #12345",
+                    "timestamp": "2024-01-15T15:45:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["urgent"],
+                },
+                # Messy variant 3: Multiple actions needed - classify + escalate + reply
+                {
+                    "email_id": "email_002_messy_3",
+                    "sender": "unknown@hotmail.com",
+                    "subject": "Something happened with my payment",
+                    "body": "I was charged twice. Please fix this. I have 3 children to feed and cannot afford this mistake.",
+                    "timestamp": "2024-01-15T16:00:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["financial", "escalation_needed"],
+                },
             ],
             "hard": [
+                # Primary: clear critical incident
                 {
                     "email_id": "email_003",
                     "sender": "ceo@customer.com",
@@ -97,11 +156,43 @@ class EmailTriageEnv:
                     "is_spam": False,
                     "urgency_indicators": ["critical", "urgent", "data_loss"],
                 },
+                # Messy variant 1: Ambiguous critical - is it really critical?
+                {
+                    "email_id": "email_003_messy_1",
+                    "sender": "manager@bigcorp.com",
+                    "subject": "Production alert - need immediate attention",
+                    "body": "System is showing warnings. Database query times increased 10%. Response times up from 100ms to 150ms. Should we be concerned? Tests still passing.",
+                    "timestamp": "2024-01-16T07:00:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["critical", "production"],
+                },
+                # Messy variant 2: Multiple conflicting signals
+                {
+                    "email_id": "email_003_messy_2",
+                    "sender": "team@internal.company",
+                    "subject": "FW: FW: URGENT - Security breach mentioned",
+                    "body": "Subject was marked urgent. Forwarded to you. In original: someone said they saw suspicious activity. Not confirmed yet. Might be false alarm.",
+                    "timestamp": "2024-01-16T08:00:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["critical", "urgent"],
+                },
+                # Messy variant 3: Chain-action required - classify + investigate + escalate + reply
+                {
+                    "email_id": "email_003_messy_3",
+                    "sender": "legal@external-firm.com",
+                    "subject": "RE: Notification of Potential Compliance Violation",
+                    "body": "We believe we may have discovered a data handling issue in your processing. Regulatory timeline is 72 hours. Our team needs clarification on your data retention policy. CEO and board should be informed.",
+                    "timestamp": "2024-01-16T09:00:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["critical", "urgent", "legal"],
+                },
             ],
         }
 
     def reset(self, task_id: str = "easy") -> Dict[str, Any]:
         """Reset environment for a new episode."""
+        import random
+        
         # Validate task_id
         if task_id not in self.difficulty_config:
             raise ValueError(f"Invalid task_id '{task_id}'. Must be one of: {list(self.difficulty_config.keys())}")
@@ -111,7 +202,8 @@ class EmailTriageEnv:
         
         config = self.difficulty_config[task_id]
         email_list = self.email_bank.get(task_id, self.email_bank["easy"])
-        current_email = email_list[0] if email_list else {}
+        # Select random email from the list for variety
+        current_email = random.choice(email_list) if email_list else {}
 
         self.current_state = StateSchema(
             task_id=task_id,
@@ -125,43 +217,148 @@ class EmailTriageEnv:
             done=False,
             reward=0.0,
             step_rewards=[],
-            ground_truth=self._get_ground_truth(task_id),
+            ground_truth=self._get_ground_truth(current_email, task_id),
         )
 
         return self._get_state_dict()
 
-    def _get_ground_truth(self, task_id: str) -> Dict[str, Any]:
-        """Get ground truth actions for a task."""
-        ground_truths = {
+    def _get_ground_truth(self, email: Dict[str, Any], task_id: str = "easy") -> Dict[str, Any]:
+        """Get ground truth actions for a task based on email_id.
+        
+        Maps specific email IDs to their expected categories, priorities, and action sequences.
+        Handles both primary and messy variants with ambiguous/conflicting signals.
+        """
+        email_id = email.get("email_id", "")
+        
+        # Map email_id to ground truth
+        email_ground_truths = {
+            # EASY emails
+            "email_001": {
+                "category": "newsletter",
+                "priority": 1,
+                "should_reply": False,
+                "actions": ["classify", "prioritize", "archive"],
+                "description": "Non-urgent newsletter that should be archived",
+                "ambiguity": "low",
+            },
+            "email_001_messy_1": {
+                "category": "marketing",
+                "priority": 1,
+                "should_reply": False,
+                "actions": ["classify", "prioritize", "archive"],
+                "description": "Marketing/promotional email - low priority",
+                "ambiguity": "medium",  # Unclear if newsletter or promo
+            },
+            "email_001_messy_2": {
+                "category": "newsletter",
+                "priority": 1,
+                "should_reply": False,
+                "actions": ["classify", "prioritize", "archive"],
+                "description": "Newsletter with spam-like formatting but legitimate - requires nuanced handling",
+                "ambiguity": "high",  # Looks like spam but is newsletter
+            },
+            
+            # MEDIUM emails
+            "email_002": {
+                "category": "bug_report",
+                "priority": 4,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "reply", "archive"],
+                "description": "Critical bug report with data loss - requires investigation and escalation",
+                "ambiguity": "low",
+            },
+            "email_002_messy_1": {
+                "category": "performance_issue",
+                "priority": 3,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "reply"],
+                "description": "Performance complaint - could be feature request or support issue",
+                "ambiguity": "high",  # Unclear: feature request? complaint? actual issue?
+            },
+            "email_002_messy_2": {
+                "category": "finance_request",
+                "priority": 3,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "escalate", "reply"],
+                "description": "Invoice review with conflicting urgency signals - needs accounting escalation",
+                "ambiguity": "medium",  # Marked urgent but sender says it was by mistake
+            },
+            "email_002_messy_3": {
+                "category": "financial_escalation",
+                "priority": 4,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "escalate", "reply", "archive"],
+                "description": "Customer payment issue with escalation indicators - requires empathetic response and escalation",
+                "ambiguity": "medium",  # Multiple action chain needed
+            },
+            
+            # HARD emails
+            "email_003": {
+                "category": "critical_incident",
+                "priority": 5,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "escalate", "reply", "archive"],
+                "description": "Critical data loss incident - requires immediate escalation to senior management",
+                "ambiguity": "low",
+            },
+            "email_003_messy_1": {
+                "category": "performance_alert",
+                "priority": 3,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "investigate"],
+                "description": "Production alert with mild indicators - investigate if truly critical or false alarm",
+                "ambiguity": "high",  # Looks critical but might be false alarm
+            },
+            "email_003_messy_2": {
+                "category": "unconfirmed_security",
+                "priority": 4,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "escalate", "investigate"],
+                "description": "Security concern forwarded multiple times with unconfirmed status - requires investigation and escalation",
+                "ambiguity": "high",  # Multiple forwards, unconfirmed threat
+            },
+            "email_003_messy_3": {
+                "category": "legal_compliance",
+                "priority": 5,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "escalate", "reply", "investigate"],
+                "description": "Legal/compliance issue with regulatory timeline - requires immediate escalation and investigation",
+                "ambiguity": "medium",  # Multiple action chain, legal timeline constraint
+            },
+        }
+        
+        # Return mapped ground truth or default based on task_id
+        if email_id in email_ground_truths:
+            return email_ground_truths[email_id]
+        
+        # Fallback to task-level defaults
+        defaults = {
             "easy": {
                 "category": "newsletter",
                 "priority": 1,
                 "should_reply": False,
                 "actions": ["classify", "prioritize", "archive"],
-                "description": "Non-urgent newsletter that should be archived"
+                "description": "Non-urgent newsletter",
+                "ambiguity": "low",
             },
             "medium": {
-                "category": "phishing",
+                "category": "bug_report",
                 "priority": 4,
                 "should_reply": True,
                 "actions": ["classify", "prioritize", "reply", "archive"],
-                "description": "Phishing attempt requiring user warning and escalation"
+                "description": "Bug report requiring investigation",
+                "ambiguity": "low",
             },
             "hard": {
                 "category": "critical_incident",
                 "priority": 5,
                 "should_reply": True,
                 "actions": ["classify", "prioritize", "escalate", "reply", "archive"],
-                "description": "Critical data loss incident requiring immediate escalation to senior management"
+                "description": "Critical incident",
+                "ambiguity": "low",
             },
         }
-        return ground_truths.get(task_id, {
-            "category": "unknown",
-            "priority": 2,
-            "should_reply": False,
-            "actions": ["classify"],
-            "description": "Unknown email type"
-        })
+        return defaults.get(task_id, defaults["easy"])
 
     def _get_state_dict(self) -> Dict[str, Any]:
         """Convert state to dictionary."""
