@@ -13,41 +13,35 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build Docker image from root Dockerfile
-        run: docker build -t openenv-api:test .
+        run: docker build -t email-triage-env:test .
 
       - name: Run container in detached mode with port mapping
-        run: docker run -d -p 8000:8000 --name api-test openenv-api:test
+        run: docker run -d -p 8000:8000 --name api-test email-triage-env:test
 
       - name: Wait for API to become available with retry logic
         run: |
+          sleep 2
           MAX_RETRIES=10
           RETRY_DELAY=3
           ATTEMPT=0
-
           while [ $ATTEMPT -lt $MAX_RETRIES ]; do
             ATTEMPT=$((ATTEMPT + 1))
             echo "Health check attempt ${ATTEMPT}/${MAX_RETRIES}..."
-
-            if curl -f http://localhost:8000/health; then
+            if curl -s -f http://localhost:8000/health > /dev/null; then
               echo "API is healthy and responding with HTTP 200"
               exit 0
             fi
-
             if [ $ATTEMPT -lt $MAX_RETRIES ]; then
               echo "API not ready, waiting ${RETRY_DELAY}s before retry..."
               sleep $RETRY_DELAY
             fi
           done
-
           echo "API failed to respond with HTTP 200 after ${MAX_RETRIES} retries"
           exit 1
 
       - name: Print container logs if health check fails
         if: failure()
-        run: |
-          echo "=== Container Logs ==="
-          docker logs api-test
-          echo "=== End Container Logs ==="
+        run: docker logs api-test
 
       - name: Stop container
         if: always()
