@@ -1,3 +1,13 @@
+---
+title: Email Triage OpenEnv
+emoji: 📧
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_file: app.py
+pinned: false
+---
+
 # Email Triage - OpenEnv Environment
 
 Production-ready OpenEnv environment for automated email triage using LLMs. Implements the complete OpenEnv specification with deterministic grading, fine-grained rewards, and OpenAI-compatible API integration.
