@@ -60,10 +60,10 @@ def demo_classification_strictness():
         action_invalid, email, ground_truth, True, 1, 3
     )
     
-    print(f"✓ Correct + High Confidence (95%):  {reward_c_c:+.2f}")
-    print(f"✓ Correct + Low Confidence (60%):   {reward_c_t:+.2f}  (50% reward penalty)")
-    print(f"✗ Wrong Classification:              {reward_w:+.2f}  (harsh penalty)")
-    print(f"✗ Invalid Category:                  {reward_inv:+.2f}  (very harsh penalty)")
+    print(f"[+] Correct + High Confidence (95%):  {reward_c_c:+.2f}")
+    print(f"[+] Correct + Low Confidence (60%):   {reward_c_t:+.2f}  (50% reward penalty)")
+    print(f"[-] Wrong Classification:              {reward_w:+.2f}  (harsh penalty)")
+    print(f"[-] Invalid Category:                  {reward_inv:+.2f}  (very harsh penalty)")
     print(f"\nReward Range: {reward_inv:.2f} to {reward_c_c:.2f}")
 
 
@@ -91,8 +91,8 @@ def demo_efficiency_strictness():
         reward, info = grader.grade_action(
             action_template, email, ground_truth, True, step, 5
         )
-        efficiency_bonus = info["efficiency_penalty"]
-        print(f"  Step {step}: {reward:+.2f}  (efficiency: {efficiency_bonus:+.2f})")
+        quality = info["metrics"]["quality"]
+        print(f"  Step {step}: {reward:+.2f}  (quality: {quality})")
     
     print("\nKey insight: Penalties are DISCRETE per step (deterministic):") 
     print("  - Step 1-2: Bonus for speed")
@@ -126,7 +126,8 @@ def demo_priority_strictness():
             action, email, ground_truth, True, 2, 4
         )
         diff = abs(priority_guess - correct_priority)
-        print(f"  Priority {priority_guess}: {reward:+.2f}  (diff={diff}, reason: {info['metrics']['reason']})")
+        quality = info['metrics']['quality']
+        print(f"  Priority {priority_guess}: {reward:+.2f}  (diff={diff}, quality={quality})")
     
     print("\nKey insight: Strict scoring - only exact gets full credit (1.0)")
 
@@ -159,7 +160,7 @@ def demo_reply_strictness():
     reward_short, info_short = grader.grade_action(
         action_short, email, ground_truth, True, 2, 4
     )
-    print(f"✗ Too short (2 chars):          {reward_short:+.2f}  ({info_short['metrics']['reason']})")
+    print(f"[-] Too short (2 chars):          {reward_short:+.2f}")
     
     # Acceptable length
     reply_good = "Thank you for your message. I will review this and get back to you."  # 65 chars
@@ -171,7 +172,7 @@ def demo_reply_strictness():
     reward_good, info_good = grader.grade_action(
         action_good, email, ground_truth, True, 2, 4
     )
-    print(f"✓ Good length (65 chars):       {reward_good:+.2f}  ({info_good['metrics']['reason']})")
+    print(f"[+] Good length (65 chars):       {reward_good:+.2f}")
     
     # Unprofessional
     reply_unprofessional = "OMG yeah ur totally right!!! HAHA this is awesome LOL"
@@ -183,7 +184,7 @@ def demo_reply_strictness():
     reward_unprofessional, info_unprofessional = grader.grade_action(
         action_unprofessional, email, ground_truth, True, 2, 4
     )
-    print(f"✗ Unprofessional tone:         {reward_unprofessional:+.2f}")
+    print(f"[-] Unprofessional tone:         {reward_unprofessional:+.2f}")
 
 
 def demo_determinism():
@@ -214,9 +215,9 @@ def demo_determinism():
         print(f"  Run {i+1}: {reward:+.2f}")
     
     if len(set(rewards)) == 1:
-        print(f"\n✓ DETERMINISTIC: All runs produced {rewards[0]:+.2f}")
+        print(f"\n[OK] DETERMINISTIC: All runs produced {rewards[0]:+.2f}")
     else:
-        print(f"\n✗ NOT DETERMINISTIC: Got {set(rewards)}")
+        print(f"\n[FAIL] NOT DETERMINISTIC: Got {set(rewards)}")
 
 
 def main():
@@ -241,7 +242,7 @@ def main():
 5. Efficiency: Step-based discrete (was continuous ratio)
 6. Confidence threshold: 70% minimum (was soft scaling)
 7. Determinism: No fuzzy logic, pure rules-based
-8. Reproducibility: Same input → Same output, always
+8. Reproducibility: Same input -> Same output, always
     """)
 
 
