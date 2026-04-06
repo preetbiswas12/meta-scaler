@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 
 
 class EmailTriageGrader:
@@ -97,7 +97,7 @@ class EmailTriageGrader:
     @staticmethod
     def compute_final_score(
         step_rewards: List[float],
-        num_steps: int = None,
+        num_steps: Optional[int] = None,
     ) -> float:
         """
         Compute final episode score from step rewards.

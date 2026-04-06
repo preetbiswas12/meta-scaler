@@ -190,7 +190,7 @@ def test_logging_format():
         # Check results
         validator.check(
             "Episode completed",
-            results.get("completed") or results.get("success"),
+            bool(results.get("completed") or results.get("success")),
             json.dumps(results, indent=2)
         )
         

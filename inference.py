@@ -70,7 +70,7 @@ class OpenAIClient:
 def run_inference_episode(
     env: EmailTriageEnv,
     task_id: str,
-    max_steps: int = None,
+    max_steps: Optional[int] = None,
     client: Optional[OpenAIClient] = None,
     model_name: str = "baseline",
     benchmark_name: str = "email-triage",

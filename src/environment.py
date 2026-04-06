@@ -169,9 +169,17 @@ class EmailTriageEnv:
             return {}
         
         # Convert current_email to dict if it's a model instance
-        email_dict = self.current_state.current_email
-        if hasattr(email_dict, 'dict'):
-            email_dict = email_dict.dict()
+        email_dict: Any = self.current_state.current_email
+        if not isinstance(email_dict, dict):
+            # Pydantic v2 uses model_dump(), v1 uses dict()
+            try:
+                email_dict = email_dict.model_dump()
+            except (AttributeError, TypeError):
+                email_dict = email_dict.dict()
+        
+        # Ensure email_dict is a dictionary
+        if not isinstance(email_dict, dict):
+            email_dict = {}
         
         return {
             "task_id": self.current_state.task_id,
