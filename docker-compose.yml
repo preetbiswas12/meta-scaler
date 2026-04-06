@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  openenv:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: openenv-test-generation
+    environment:
+      - API_BASE_URL=${API_BASE_URL:-https://api.openai.com/v1}
+      - MODEL_NAME=${MODEL_NAME:-gpt-3.5-turbo}
+      - HF_TOKEN=${HF_TOKEN:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - PYTHONUNBUFFERED=1
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /app/__pycache__
+    command: python inference.py --task all --episodes 1 --steps 3
+    restart: unless-stopped

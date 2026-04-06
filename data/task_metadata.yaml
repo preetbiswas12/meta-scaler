@@ -1,0 +1,14 @@
+# Sample task configurations
+# Can be extended with additional test cases or examples
+
+easy:
+  description: "Simple utility function testing"
+  estimated_time: "2-3 minutes"
+  
+medium:
+  description: "Functions with multiple edge cases"
+  estimated_time: "5-8 minutes"
+  
+hard:
+  description: "Complex systems with state management"
+  estimated_time: "10-15 minutes"
