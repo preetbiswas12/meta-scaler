@@ -56,7 +56,7 @@ class LocalFineTurningExample:
                 TrainingArguments,
                 Trainer,
             )
-            from peft import LoraConfig, get_peft_model
+            from peft import LoraConfig, get_peft_model  # type: ignore
             from datasets import Dataset
         except ImportError:
             print("Install required packages: pip install transformers datasets peft")
@@ -92,7 +92,7 @@ class LocalFineTurningExample:
         model.print_trainable_parameters()
         
         # Training arguments
-        training_args = TrainingArguments(
+        training_args = TrainingArguments(  # type: ignore
             output_dir=output_dir,
             num_train_epochs=num_epochs,
             per_device_train_batch_size=batch_size,
