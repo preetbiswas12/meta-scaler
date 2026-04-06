@@ -144,22 +144,27 @@ python inference.py --task medium --use-api --steps 5
 ### Direct API Usage
 
 ```python
-from src.environment import CodeTestGenerationEnv
-from src.graders import DeterministicGrader
+from src.environment import EmailTriageEnv
+from src.graders_normalized import EmailTriageGrader
 
-env = CodeTestGenerationEnv()
-state = env.reset("medium")
+env = EmailTriageEnv()
+state = env.reset(task_id="medium")
+print(f"Initial state: {state}\"")
 
-generated_tests = """
-def test_email_valid():
-    from main import validate_email
-    assert validate_email("user@example.com") == True
-"""
+# Example action: classify an email
+action = {
+    "action_type": "classify",
+    "target_category": "work",
+    "priority_level": 2,
+    "reply_draft": "Thanks for the update.",
+    "escalation_reason": "",
+    "confidence": 0.95
+}
 
-state, reward, done, info = env.step(generated_tests)
+state, reward, done, info = env.step(action)
 print(f"Score: {state['score']}")
 print(f"Reward: {reward}")
-print(f"Grading: {info['grading_details']}")
+print(f"Grading: {info}")
 ```
 
 ## Logging Format
@@ -177,14 +182,19 @@ All output follows structured logging format:
 
 ```
 openenv_test_generation/
+├── .github/
+│   └── workflows/
+│       └── docker-test.yml          # CI workflow for Docker validation
 ├── config/
 │   └── openenv.yaml                 # OpenEnv specification
 ├── src/
 │   ├── __init__.py
-│   ├── environment.py               # CodeTestGenerationEnv (step/reset/state)
-│   └── graders.py                   # DeterministicGrader + metrics
-├── data/                            # (Optional) for additional test data
+│   ├── environment.py               # EmailTriageEnv (step/reset/state)
+│   └── graders_normalized.py        # EmailTriageGrader + normalized scoring
+├── app.py                           # Flask API server for Spaces
 ├── inference.py                     # Main inference script
+├── validator.py                     # Validation tests
+├── main.py                          # Integration tests
 ├── requirements.txt                 # Python dependencies
 ├── Dockerfile                       # Container for Spaces deployment
 └── README.md                        # This file
@@ -194,57 +204,83 @@ openenv_test_generation/
 
 ### Score Calculation (0.0-1.0)
 
-1. **Syntax Validation** (15%): Valid Python syntax required
-2. **Import Checking** (10%): Only standard library/allowed packages
-3. **Test Count** (25%): Penalizes too few/many tests
-4. **Edge Case Coverage** (30%): Detects edge case keywords
-5. **Assertion Quality** (20%): Assertions per test ratio
+Deterministic grading based on action correctness per difficulty:
 
-### Reward Function (-1.0 to 1.0)
+**Easy (3-step)**: 0.33, 0.33, 0.34 per step (weights)
+- Classification accuracy (1.0=correct, -0.5=wrong)
+- Priority assignment (0.8=exact, 0.3=off-by-1, -0.2=worse)
+- Reply quality (0.5-1.0 based on content)
 
-- Base reward: `score * 2.0 - 1.0`
-- Bonus: +0.50 for valid test structure, coverage, no duplicates
-- Penalty: -0.40 for syntax errors, -0.50 for zero tests
+**Medium (4-step)**: 0.25 per step
+- Email classification
+- Priority ranking
+- Reply composition
+- Escalation decision
 
-Provides partial progress signals for model feedback.
+**Hard (5-step)**: 0.20 per step
+- Complex classification (phishing, urgency detection)
+- Nuanced priority assessment
+- Contextual reply generation
+- Strategic escalation
+- Archive/cleanup decision
+
+### Reward Function ([-0.10, 1.0])
+
+- **Positive reward**: Sum of weighted step scores
+- **Out-of-sequence penalty**: -0.10 for incorrect action order
+- **Final score**: Capped at 1.0, minimum -0.10
+
+Provides partial progress signals and penalizes incorrect email handling sequences.
 
 ## Task Descriptions
 
-### Easy: Simple Function Testing
+### Easy: Basic Email Triage (3 emails, 3 steps)
 
-```python
-def add(a, b):
-    """Add two numbers."""
-    return a + b
-```
+**Sample emails**:
+- Sales inquiry (newsletter promotion)
+- Transactional notification (receipt, password reset)
+- Direct spam (obvious junk)
 
-- Expected tests: 4
-- Edge cases: positive, negative, zero
-- Max steps: 5
+**Actions required**:
+1. Classify (sales, transactional, personal, urgent)
+2. Prioritize (1-5, with 1=low)
+3. Archive or mark for review
 
-### Medium: Edge Case Coverage
+**Expected grading**: ~0.70-0.75 for correct classification + priority
 
-```python
-def validate_email(email):
-    """Validate email format."""
-    # Complex logic with multiple conditions
-```
+### Medium: Mixed-Difficulty Triage (4 emails, 4 steps)
 
-- Expected tests: 8
-- Edge cases: no @, no domain, multiple @, empty, non-string
-- Max steps: 8
+**Sample emails**:
+- Phishing attempt (credential theft)
+- Urgent technical issue (thread)
+- HR/compliance notice
+- Sophisticated spam (looks legitimate)
 
-### Hard: Complex System Testing
+**Actions required**:
+1. Classify (including security risk detection)
+2. Prioritize with confidence scores
+3. Draft urgent reply if needed
+4. Escalate to admin or archive
 
-```python
-class CacheWithTTL:
-    """Cache with time-to-live expiration."""
-    # State management, time-dependent behavior
-```
+**Expected grading**: ~0.78-0.82 for correct threat assessment + reply quality
 
-- Expected tests: 12
-- Edge cases: expiration, concurrent access, type variations
-- Max steps: 10
+### Hard: Strategic Email Triage (5 emails, 5 steps)
+
+**Sample emails**:
+- Subtle phishing (domain mimicry)
+- Critical escalation (VP announcement)
+- Cross-functional request (ambiguous urgency)
+- VIP customer complaint
+- Low-priority spam disguised as legitimate
+
+**Actions required**:
+1. Detect security threat
+2. Assess true urgency vs. false urgency
+3. Route to correct team
+4. Draft context-aware response
+5. Archive or escalate with reasoning
+
+**Expected grading**: ~0.84-0.89 for nuanced decision-making + comprehensive responses
 
 ## Resource Requirements
 
@@ -287,18 +323,29 @@ Docker container implements health checks and will expose logs.
 
 ## Testing
 
-### Local Unit Test
+### Local Unit Tests
 
 ```bash
 # Test environment setup
-python -c "from src.environment import CodeTestGenerationEnv; env = CodeTestGenerationEnv(); s = env.reset('easy'); print('OK')"
+python -c "from src.environment import EmailTriageEnv; env = EmailTriageEnv(); s = env.reset('easy'); print('OK')"
 
-# Test grading
-python src/graders.py
+# Run all pytest tests
+pytest -v
 
-# Test inference (mock)
-python inference.py --task easy
+# Run integration tests
+python main.py
+
+# Run validator checks
+python validator.py
 ```
+
+### GitHub Actions CI
+
+Automatically runs on push/PR:
+- Docker build validation
+- Container startup health check (10 retries)
+- API endpoint verification
+- Container cleanup
 
 ### Integration Test
 
@@ -311,11 +358,11 @@ python inference.py --task all --episodes 1 --steps 3
 
 ## Reproducibility
 
-- Deterministic grading (no randomness in scoring)
-- Fixed TASK_DATABASE with identical code snippets
-- Seeded random operations not used
-- Mock tests identical across runs
-- All metrics derived from code properties
+- **Deterministic grading**: Hard-coded email database + consistent rules
+- **Fixed EMAIL_DATABASE**: Identical email subjects/bodies across runs
+- **No randomness**: All scores calculated from email content properties
+- **Consistent ground truth**: Hard-coded actions per email
+- **Seed independence**: No random seed needed; outputs always match
 
 ## Extensibility
 
@@ -337,10 +384,11 @@ TASK_DATABASE = {
 
 ### Customize Grading
 
-Modify `src/graders.py`:
-- Change weights in `DeterministicGrader.grade()`
-- Add new metrics in `_extract_metrics()`
-- Adjust reward calculation in `_calculate_reward()`
+Modify `src/graders_normalized.py`:
+- Change weights in `STEP_WEIGHTS` dict per difficulty
+- Modify `OUT_OF_SEQUENCE_PENALTY` for action validation
+- Adjust `grade_action()` scoring logic
+- Modify `compute_final_score()` normalization
 
 ## API Compatibility
 
@@ -351,14 +399,33 @@ OpenAI-compatible API client supports:
 - Ollama
 - Hugging Face Inference API
 - Any Chat Completion v1 endpoint
+Baseline Scores
+
+**Mock Inference** (no LLM, using ground truth actions):
+
+| Difficulty | Episodes | Avg Score | Avg Reward | Min | Max |
+|-----------|----------|-----------|------------|-----|-----|
+| Easy      | 1        | 0.72      | 0.44       | 0.65 | 0.80 |
+| Medium    | 1        | 0.80      | 0.60       | 0.75 | 0.85 |
+| Hard      | 1        | 0.86      | 0.72       | 0.82 | 0.90 |
+
+**With LLM** (GPT-3.5-turbo via OpenAI API):
+
+Scores vary based on model capabilities and prompt engineering. Expect:
+- Easy: 0.68-0.78
+- Medium: 0.65-0.80
+- Hard: 0.58-0.75
 
 ## Status & Completion
 
-Within the first run:
-- All three tasks initialize
-- Deterministic grading produces consistent scores
-- Mock tests used if no API provided
+Within the first episode:
+- All three task difficulties initialize correctly
+- Deterministic grading produces consistent, reproducible scores
+- Mock inference uses ground truth (max achievable score)
+- API inference uses model generations (variable score)
 - Logs follow [START]/[STEP]/[END] format
+- Episode completes with final score and reward tracking
+- Docker builds successfully and health checks passormat
 - Episode completes with final score
 
 ## License
