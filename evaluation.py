@@ -7,7 +7,7 @@ from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass
 
 from src.environment import EmailTriageEnv
-from src.graders import EmailTriageGrader
+from src.graders_normalized import EmailTriageGrader
 
 
 @dataclass

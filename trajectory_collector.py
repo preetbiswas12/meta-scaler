@@ -3,11 +3,11 @@
 import json
 import sys
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from dataclasses import dataclass, asdict
 
 from src.environment import EmailTriageEnv
-from src.graders import EmailTriageGrader
+from src.graders_normalized import EmailTriageGrader
 
 
 @dataclass
@@ -38,7 +38,7 @@ class Trajectory:
 class TrajectoryCollector:
     """Collect high-quality trajectories from environment."""
     
-    def __init__(self, num_episodes: int = 50, seed: int = None):
+    def __init__(self, num_episodes: int = 50, seed: Optional[int] = None):
         self.env = EmailTriageEnv()
         self.grader = EmailTriageGrader()
         self.num_episodes = num_episodes

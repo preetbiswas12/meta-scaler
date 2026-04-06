@@ -6,7 +6,7 @@ Shows reward differences between correct/incorrect actions.
 import sys
 import json
 from src.environment import EmailTriageEnv, ActionSchema
-from src.graders import EmailTriageGrader
+from src.graders_normalized import EmailTriageGrader
 
 def demo_classification_strictness():
     print("\n" + "="*70)
@@ -27,7 +27,7 @@ def demo_classification_strictness():
         "confidence": 0.95
     }
     reward_c_c, info_c_c = grader.grade_action(
-        action_correct_confident, email, ground_truth, 1, 3
+        action_correct_confident, email, ground_truth, True, 1, 3
     )
     
     # Correct but low confidence
@@ -37,7 +37,7 @@ def demo_classification_strictness():
         "confidence": 0.6
     }
     reward_c_t, info_c_t = grader.grade_action(
-        action_correct_tentative, email, ground_truth, 1, 3
+        action_correct_tentative, email, ground_truth, True, 1, 3
     )
     
     # Wrong classification
@@ -47,7 +47,7 @@ def demo_classification_strictness():
         "confidence": 0.9
     }
     reward_w, info_w = grader.grade_action(
-        action_wrong, email, ground_truth, 1, 3
+        action_wrong, email, ground_truth, True, 1, 3
     )
     
     # Invalid category
@@ -57,7 +57,7 @@ def demo_classification_strictness():
         "confidence": 0.95
     }
     reward_inv, info_inv = grader.grade_action(
-        action_invalid, email, ground_truth, 1, 3
+        action_invalid, email, ground_truth, True, 1, 3
     )
     
     print(f"✓ Correct + High Confidence (95%):  {reward_c_c:+.2f}")
@@ -89,7 +89,7 @@ def demo_efficiency_strictness():
     print("\nClassify correctly at different steps (hard difficulty, max_steps=5):")
     for step in range(1, 7):
         reward, info = grader.grade_action(
-            action_template, email, ground_truth, step, 5
+            action_template, email, ground_truth, True, step, 5
         )
         efficiency_bonus = info["efficiency_penalty"]
         print(f"  Step {step}: {reward:+.2f}  (efficiency: {efficiency_bonus:+.2f})")
@@ -123,7 +123,7 @@ def demo_priority_strictness():
             "confidence": 0.85
         }
         reward, info = grader.grade_action(
-            action, email, ground_truth, 2, 4
+            action, email, ground_truth, True, 2, 4
         )
         diff = abs(priority_guess - correct_priority)
         print(f"  Priority {priority_guess}: {reward:+.2f}  (diff={diff}, reason: {info['metrics']['reason']})")
@@ -157,7 +157,7 @@ def demo_reply_strictness():
         "confidence": 0.85
     }
     reward_short, info_short = grader.grade_action(
-        action_short, email, ground_truth, 2, 4
+        action_short, email, ground_truth, True, 2, 4
     )
     print(f"✗ Too short (2 chars):          {reward_short:+.2f}  ({info_short['metrics']['reason']})")
     
@@ -169,7 +169,7 @@ def demo_reply_strictness():
         "confidence": 0.85
     }
     reward_good, info_good = grader.grade_action(
-        action_good, email, ground_truth, 2, 4
+        action_good, email, ground_truth, True, 2, 4
     )
     print(f"✓ Good length (65 chars):       {reward_good:+.2f}  ({info_good['metrics']['reason']})")
     
@@ -181,7 +181,7 @@ def demo_reply_strictness():
         "confidence": 0.85
     }
     reward_unprofessional, info_unprofessional = grader.grade_action(
-        action_unprofessional, email, ground_truth, 2, 4
+        action_unprofessional, email, ground_truth, True, 2, 4
     )
     print(f"✗ Unprofessional tone:         {reward_unprofessional:+.2f}")
 
@@ -208,7 +208,7 @@ def demo_determinism():
     rewards = []
     for i in range(5):
         reward, info = grader.grade_action(
-            action, email, ground_truth, 1, 3
+            action, email, ground_truth, True, 1, 3
         )
         rewards.append(reward)
         print(f"  Run {i+1}: {reward:+.2f}")
