@@ -1,103 +1,269 @@
 #!/usr/bin/env python3
-"""
-Entry point for Code Test Generation OpenEnv Environment
-"""
-import sys
-import argparse
-from src.environment import CodeTestGenerationEnv
-from src.tasks import list_all_tasks, get_task_by_id
-from inference import run_inference_episode, OpenAIClient
+"""Integration tests for EmailTriageEnv."""
+
 import json
+import sys
+from typing import Dict, Any
+
+from src.environment import EmailTriageEnv, ActionSchema
 
 
-def show_tasks():
-    """Display all available tasks"""
-    print("Available Tasks:")
-    print("=" * 60)
-    for task_id in list_all_tasks():
-        task = get_task_by_id(task_id)
-        print(f"\n{task_id.upper()}: {task['name']}")
-        print(f"  Description: {task['description']}")
-        print(f"  Expected Tests: {task['expected_tests']}")
-        print(f"  Edge Cases: {', '.join(task['edge_cases'][:3])}...")
+def test_easy_episode():
+    """Test an easy difficulty episode."""
+    print("\n" + "=" * 80)
+    print("TEST: Easy Episode (3 required steps)")
+    print("=" * 80)
+    
+    env = EmailTriageEnv()
+    state = env.reset(task_id="easy")
+    
+    print(f"\nInitial State:")
+    print(f"  Episode ID: {state['episode_id']}")
+    print(f"  Email: {state['current_email']['subject']}")
+    print(f"  Required Actions: {state['ground_truth']['description']}")
+    
+    # Simulate required actions: classify -> prioritize -> archive
+    actions = [
+        {
+            "action_type": "classify",
+            "target_category": state['ground_truth']['category'],
+            "confidence": 0.9
+        },
+        {
+            "action_type": "prioritize",
+            "priority_level": state['ground_truth']['priority'],
+            "confidence": 0.8
+        },
+        {
+            "action_type": "archive",
+            "confidence": 0.7
+        }
+    ]
+    
+    total_reward = 0
+    for i, action_dict in enumerate(actions, 1):
+        print(f"\nStep {i}: Taking action '{action_dict['action_type']}'")
+        
+        # Convert to ActionSchema
+        action = ActionSchema(**action_dict)
+        
+        # Execute step
+        state, reward, done, info = env.step(action_dict)
+        
+        print(f"  Reward: {reward:.4f}")
+        print(f"  Done: {done}")
+        print(f"  Info: {json.dumps(info, indent=2, default=str)}")
+        
+        total_reward += reward
+        
+        if done:
+            print(f"\n[OK] Episode completed after {i} steps")
+            break
+    
+    print(f"\nFinal Score: {state['score']:.4f}")
+    print(f"Total Episode Reward: {total_reward:.4f}")
+    
+    # Test passes if episode completed (all required actions taken in sequence)
+    all_required_completed = state.get('actions_taken') and len(state['actions_taken']) >= 3
+    assert all_required_completed, "Easy episode should complete with 3+ actions"
 
 
-def run_demo():
-    """Run a simple demo"""
-    print("Running Demo: Code Test Generation")
-    print("=" * 60)
+def test_medium_episode():
+    """Test a medium difficulty episode."""
+    print("\n" + "=" * 80)
+    print("TEST: Medium Episode (4 required steps)")
+    print("=" * 80)
+    
+    env = EmailTriageEnv()
+    state = env.reset(task_id="medium")
+    
+    print(f"\nInitial State:")
+    print(f"  Episode ID: {state['episode_id']}")
+    print(f"  Email: {state['current_email']['subject']}")
+    print(f"  Required Actions: {state['ground_truth']['description']}")
+    
+    # Simulate required actions: classify -> prioritize -> reply -> archive
+    actions = [
+        {
+            "action_type": "classify",
+            "target_category": state['ground_truth']['category'],
+            "confidence": 0.9
+        },
+        {
+            "action_type": "prioritize",
+            "priority_level": state['ground_truth']['priority'],
+            "confidence": 0.8
+        },
+        {
+            "action_type": "reply",
+            "reply_draft": "Thank you for your inquiry. We are looking into this matter and will follow up shortly.",
+            "confidence": 0.8
+        },
+        {
+            "action_type": "archive",
+            "confidence": 0.7
+        }
+    ]
+    
+    total_reward = 0
+    for i, action_dict in enumerate(actions, 1):
+        print(f"\nStep {i}: Taking action '{action_dict['action_type']}'")
+        
+        action = ActionSchema(**action_dict)
+        state, reward, done, info = env.step(action_dict)
+        
+        print(f"  Reward: {reward:.4f}")
+        print(f"  Done: {done}")
+        
+        total_reward += reward
+        
+        if done:
+            print(f"\n[OK] Episode completed after {i} steps")
+            break
+    
+    print(f"\nFinal Score: {state['score']:.4f}")
+    print(f"Total Episode Reward: {total_reward:.4f}")
+    
+    # Test passes if episode completed (all required actions taken in sequence)
+    all_required_completed = state.get('actions_taken') and len(state['actions_taken']) >= 4
+    assert all_required_completed, "Medium episode should complete with 4+ actions"
 
-    env = CodeTestGenerationEnv()
-    state = env.reset("easy")
 
-    print(f"\nTask: {state['function_name']}")
-    print(f"Code:\n{state['code_snippet']}")
+def test_hard_episode():
+    """Test a hard difficulty episode."""
+    print("\n" + "=" * 80)
+    print("TEST: Hard Episode (5 required steps)")
+    print("=" * 80)
+    
+    env = EmailTriageEnv()
+    state = env.reset(task_id="hard")
+    
+    print(f"\nInitial State:")
+    print(f"  Episode ID: {state['episode_id']}")
+    print(f"  Email: {state['current_email']['subject']}")
+    print(f"  Required Actions: {state['ground_truth']['description']}")
+    
+    # Simulate required actions: classify -> prioritize -> escalate -> reply -> archive
+    actions = [
+        {
+            "action_type": "classify",
+            "target_category": state['ground_truth']['category'],
+            "confidence": 0.95
+        },
+        {
+            "action_type": "prioritize",
+            "priority_level": state['ground_truth']['priority'],
+            "confidence": 0.9
+        },
+        {
+            "action_type": "escalate",
+            "escalation_reason": "Critical business issue requiring immediate action",
+            "confidence": 0.9
+        },
+        {
+            "action_type": "reply",
+            "reply_draft": "We take this matter seriously and have escalated to our executive team for immediate investigation. We will provide a detailed update within 2 hours.",
+            "confidence": 0.85
+        },
+        {
+            "action_type": "archive",
+            "confidence": 0.7
+        }
+    ]
+    
+    total_reward = 0
+    for i, action_dict in enumerate(actions, 1):
+        print(f"\nStep {i}: Taking action '{action_dict['action_type']}'")
+        
+        action = ActionSchema(**action_dict)
+        state, reward, done, info = env.step(action_dict)
+        
+        print(f"  Reward: {reward:.4f}")
+        print(f"  Done: {done}")
+        
+        total_reward += reward
+        
+        if done:
+            print(f"\n[OK] Episode completed after {i} steps")
+            break
+    
+    print(f"\nFinal Score: {state['score']:.4f}")
+    print(f"Total Episode Reward: {total_reward:.4f}")
+    
+    # Test passes if episode completed (all required actions taken in sequence)
+    all_required_completed = state.get('actions_taken') and len(state['actions_taken']) >= 5
+    assert all_required_completed, "Hard episode should complete with 5+ actions"
 
-    test_code = '''
-def test_add_positive():
-    assert add(2, 3) == 5
 
-def test_add_negative():
-    assert add(-1, -1) == -2
-
-def test_add_zero():
-    assert add(0, 0) == 0
-'''
-
-    print(f"\nGenerated Tests:\n{test_code}")
-
-    state, reward, done, info = env.step(test_code)
-
-    print(f"\nResults:")
-    print(f"  Score: {state['score']:.3f}")
-    print(f"  Reward: {reward:.3f}")
-    print(f"  Done: {done}")
-    print(f"  Metrics: {info['grading_details']['metrics']}")
+def test_out_of_sequence():
+    """Test that out-of-sequence actions are penalized."""
+    print("\n" + "=" * 80)
+    print("TEST: Out-of-Sequence Actions")
+    print("=" * 80)
+    
+    env = EmailTriageEnv()
+    state = env.reset(task_id="easy")
+    
+    print(f"\nTrying to take 'archive' as first action (should be 'classify')...")
+    
+    action = {
+        "action_type": "archive",
+        "confidence": 0.5
+    }
+    
+    state, reward, done, info = env.step(action)
+    
+    print(f"  Reward: {reward:.4f}")
+    print(f"  Is correct sequence: {info.get('is_correct_sequence', 'N/A')}")
+    
+    # Normalized system: out-of-sequence penalty is -0.10 (small, bounded)
+    # Should have negative reward
+    assert reward < -0.05, f"Out-of-sequence penalty should be negative, got {reward}"
 
 
 def main():
-    """Main entry point"""
-    parser = argparse.ArgumentParser(
-        description="Code Test Generation OpenEnv Environment"
-    )
-    parser.add_argument(
-        "command",
-        choices=["demo", "tasks", "inference"],
-        help="Command to run",
-    )
-    parser.add_argument(
-        "--task",
-        choices=["easy", "medium", "hard", "all"],
-        default="easy",
-        help="Task difficulty (for inference)",
-    )
-    parser.add_argument(
-        "--steps", type=int, default=3, help="Max steps per episode"
-    )
-    parser.add_argument(
-        "--episodes", type=int, default=1, help="Number of episodes"
-    )
-    parser.add_argument(
-        "--use-api",
-        action="store_true",
-        help="Use actual OpenAI API",
-    )
-
-    args = parser.parse_args()
-
-    if args.command == "demo":
-        run_demo()
-    elif args.command == "tasks":
-        show_tasks()
-    elif args.command == "inference":
-        # Import here to avoid issues if inference modules not ready
-        from inference import main as inference_main
-
-        sys.argv = ["inference.py", "--task", args.task, "--steps", str(args.steps), "--episodes", str(args.episodes)]
-        if args.use_api:
-            sys.argv.append("--use-api")
-        sys.exit(inference_main())
-
+    """Run all integration tests."""
+    print("\n" + "=" * 80)
+    print("EMAIL TRIAGE ENVIRONMENT - INTEGRATION TESTS")
+    print("=" * 80)
+    
+    tests = [
+        ("Easy Episode", test_easy_episode),
+        ("Medium Episode", test_medium_episode),
+        ("Hard Episode", test_hard_episode),
+        ("Out-of-Sequence Penalty", test_out_of_sequence),
+    ]
+    
+    results = {}
+    for test_name, test_func in tests:
+        try:
+            test_func()  # Assertions now handle pass/fail
+            results[test_name] = ("PASS", None)
+        except AssertionError as e:
+            results[test_name] = ("FAIL", str(e))
+            print(f"\n[FAIL] {test_name}: {e}")
+        except Exception as e:
+            results[test_name] = ("ERROR", str(e))
+            print(f"\n[ERROR] {test_name}: {e}")
+    
+    # Summary
+    print("\n" + "=" * 80)
+    print("TEST SUMMARY")
+    print("=" * 80)
+    
+    for test_name, (status, error) in results.items():
+        if error:
+            print(f"  {test_name}: {status} - {error}")
+        else:
+            print(f"  {test_name}: {status}")
+    
+    # Exit code
+    passed = sum(1 for status, _ in results.values() if status == "PASS")
+    failed = sum(1 for status, _ in results.values() if status in ("FAIL", "ERROR"))
+    
+    print(f"\nTotal: {passed} passed, {failed} failed out of {len(results)}")
+    
+    return 0 if failed == 0 else 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

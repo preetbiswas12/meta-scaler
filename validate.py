@@ -42,10 +42,9 @@ def check_imports():
     """Check that all modules can be imported"""
     print("Checking imports...")
     try:
-        from src.environment import CodeTestGenerationEnv
-        from src.graders import DeterministicGrader
-        from src.tasks import list_all_tasks
-        from inference import OpenAIClient, _get_mock_tests
+        from src.environment import EmailTriageEnv
+        from src.graders_normalized import EmailTriageGrader
+        from inference import OpenAIClient
         print("  ✓ All imports successful")
         return True
     except Exception as e:
@@ -57,8 +56,8 @@ def check_environment():
     """Check environment initialization"""
     print("Checking environment initialization...")
     try:
-        from src.environment import CodeTestGenerationEnv
-        env = CodeTestGenerationEnv()
+        from src.environment import EmailTriageEnv
+        env = EmailTriageEnv()
         assert env is not None
         print("  ✓ Environment initializes correctly")
         return True
@@ -71,13 +70,13 @@ def check_tasks():
     """Check all tasks are available"""
     print("Checking tasks...")
     try:
-        from src.environment import CodeTestGenerationEnv
-        env = CodeTestGenerationEnv()
+        from src.environment import EmailTriageEnv
+        env = EmailTriageEnv()
         
         for task_id in ["easy", "medium", "hard"]:
             state = env.reset(task_id)
             assert state["difficulty"] == task_id
-            assert state["code_snippet"] != ""
+            assert state["current_email"]["sender"] != ""
         
         print("  ✓ All 3 tasks available and working")
         return True
@@ -90,19 +89,29 @@ def check_grading():
     """Check deterministic grading"""
     print("Checking grading system...")
     try:
-        from src.graders import DeterministicGrader
-        grader = DeterministicGrader()
+        from src.graders_normalized import EmailTriageGrader
+        from src.environment import ActionSchema
         
-        test_code = "def test(): assert True"
-        score1, reward1, _ = grader.grade(
-            "def func(): pass", test_code, "easy", "func"
+        grader = EmailTriageGrader()
+        
+        action = ActionSchema(
+            action_type="classify",
+            target_category="sales_inquiry",
+            confidence=0.95
         )
-        score2, reward2, _ = grader.grade(
-            "def func(): pass", test_code, "easy", "func"
+        
+        email = {"email_id": "test"}
+        ground_truth = {"category": "sales_inquiry"}
+        
+        score1, info1 = grader.grade_action(
+            action.model_dump(), email, ground_truth, True, 1, 3, "easy"
+        )
+        score2, info2 = grader.grade_action(
+            action.model_dump(), email, ground_truth, True, 1, 3, "easy"
         )
         
         assert score1 == score2, "Grading is not deterministic"
-        print(f"  ✓ Deterministic grading working (scores: {score1:.3f})")
+        print(f"  ✓ Deterministic grading working (reward: {score1:.3f})")
         return True
     except Exception as e:
         print(f"  ✗ Grading check failed: {e}")
@@ -167,13 +176,16 @@ def run_quick_episode():
     """Run a quick episode"""
     print("Running quick episode...")
     try:
-        from src.environment import CodeTestGenerationEnv
+        from src.environment import EmailTriageEnv
         
-        env = CodeTestGenerationEnv()
+        env = EmailTriageEnv()
         state = env.reset("easy")
         
-        tests = "def test_add(): assert 2 + 3 == 5"
-        state, reward, done, info = env.step(tests)
+        action = {
+            "action_type": "classify",
+            "target_category": "newsletter"
+        }
+        state, reward, done, info = env.step(action)
         
         assert state["score"] >= 0.0 and state["score"] <= 1.0
         assert reward >= -1.0 and reward <= 1.0

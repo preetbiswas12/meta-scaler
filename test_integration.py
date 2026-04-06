@@ -4,7 +4,7 @@ Integration tests for Email Triage environment
 import sys
 import json
 from src.environment import EmailTriageEnv, ActionSchema
-from src.graders import EmailTriageGrader
+from src.graders_normalized import EmailTriageGrader
 
 
 def test_environment_initialization():
@@ -143,10 +143,10 @@ def test_email_grader_classification():
     email = {"email_id": "test"}
     ground_truth = {"category": "sales_inquiry"}
     
-    reward, info = grader.grade_action(action, email, ground_truth, 1, 3)
+    reward, info = grader.grade_action(action, email, ground_truth, is_correct_sequence=True, step_number=1, total_steps=3, difficulty="easy")
     
     assert reward > 0, "Correct classification should have positive reward"
-    assert info["metrics"]["correct_category"] == True
+    assert info["metrics"]["quality"] in ["perfect", "correct", "low_confidence"], f"Expected good quality, got {info['metrics']['quality']}"
     print("✓ Email grader classification OK")
 
 
@@ -163,8 +163,8 @@ def test_grader_deterministic():
     email = {"email_id": "test"}
     ground_truth = {"category": "phishing", "priority": 4}
     
-    reward1, info1 = grader.grade_action(action, email, ground_truth, 1, 4)
-    reward2, info2 = grader.grade_action(action, email, ground_truth, 1, 4)
+    reward1, info1 = grader.grade_action(action, email, ground_truth, is_correct_sequence=True, step_number=1, total_steps=4, difficulty="easy")
+    reward2, info2 = grader.grade_action(action, email, ground_truth, is_correct_sequence=True, step_number=1, total_steps=4, difficulty="easy")
     
     assert reward1 == reward2, "Grading should be deterministic"
     print("✓ Grader deterministic OK")

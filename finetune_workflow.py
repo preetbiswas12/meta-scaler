@@ -6,7 +6,7 @@ Collects data → Creates training pairs → Fine-tunes model → Evaluates resu
 import json
 import os
 import sys
-from typing import Dict, Any
+from typing import Dict, Any, cast
 import shutil
 
 
@@ -139,7 +139,7 @@ def step_4_submit_finetuning_job(
         finetuner = finetuner_config.get("finetuner")
         if not finetuner:
             print("No finetuner available")
-            return None
+            return cast(str, None)
         
         job_id = finetuner.submit_job()
         
@@ -154,7 +154,7 @@ def step_4_submit_finetuning_job(
         return job_id
     except Exception as e:
         print(f"✗ Error submitting job: {e}")
-        return None
+        return cast(str, None)
 
 
 def step_5_evaluate_baseline(num_episodes: int = 30) -> Dict:

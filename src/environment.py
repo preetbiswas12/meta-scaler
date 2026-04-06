@@ -1,17 +1,16 @@
 """
-Email Triage OpenEnv Environment
-Following OpenEnv specification with step(), reset(), and state() APIs
-Realistic email triage with classification, priority, reply drafting, escalation
+Email Triage OpenEnv Environment - Multi-Step Implementation
+OpenEnv-compliant multi-step reasoning with normalized grading.
 """
 import json
 import uuid
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
-from dataclasses import dataclass, asdict
 from pydantic import BaseModel, Field
 
 
 class EmailSchema(BaseModel):
+    """Email message schema."""
     email_id: str
     sender: str
     subject: str
@@ -23,6 +22,7 @@ class EmailSchema(BaseModel):
 
 
 class ActionSchema(BaseModel):
+    """Action schema for email triage."""
     action_type: str
     target_category: str = ""
     priority_level: int = 0
@@ -32,314 +32,225 @@ class ActionSchema(BaseModel):
 
 
 class StateSchema(BaseModel):
+    """Environment state schema."""
     task_id: str
     episode_id: str
     difficulty: str
     step: int = 0
     max_steps: int = 5
-    current_email: EmailSchema
+    current_email: Dict[str, Any]
     actions_taken: List[Dict[str, Any]] = Field(default_factory=list)
     score: float = 0.0
     done: bool = False
     reward: float = 0.0
     ground_truth: Dict[str, Any] = Field(default_factory=dict)
+    step_rewards: List[float] = Field(default_factory=list)
 
 
 class EmailTriageEnv:
-    """Email triage environment with OpenEnv spec (step, reset, state APIs)."""
-
-    EMAIL_SCENARIOS = {
-        "easy": [
-            {
-                "email_id": "easy_1",
-                "sender": "customer@example.com",
-                "subject": "Question about product pricing",
-                "body": "Hi, I want to know the price of your premium plan. Can you help me?",
-                "is_spam": False,
-                "urgency_indicators": [],
-                "category": "sales_inquiry",
-                "priority": 2,
-                "should_reply": True,
-                "reply_keywords": ["price", "premium"],
-                "description": "Simple sales inquiry - standard response"
-            },
-            {
-                "email_id": "easy_2",
-                "sender": "newsletter@domain.com",
-                "subject": "Weekly Newsletter - May 2026",
-                "body": "Check out this week's top articles...",
-                "is_spam": False,
-                "urgency_indicators": [],
-                "category": "newsletter",
-                "priority": 1,
-                "should_reply": False,
-                "reply_keywords": [],
-                "description": "Regular newsletter - archive without reply"
-            },
-            {
-                "email_id": "easy_3",
-                "sender": "support@vendor.com",
-                "subject": "Your order #12345 has shipped",
-                "body": "Your package has shipped. Tracking: xyz123",
-                "is_spam": False,
-                "urgency_indicators": [],
-                "category": "transactional",
-                "priority": 1,
-                "should_reply": False,
-                "reply_keywords": [],
-                "description": "Order confirmation - archive"
-            }
-        ],
-        "medium": [
-            {
-                "email_id": "med_1",
-                "sender": "unknown@sketchy-domain.xyz",
-                "subject": "URGENT: Verify your account NOW!!!",
-                "body": "Click here immediately to verify your account: [malicious_link]",
-                "is_spam": True,
-                "urgency_indicators": ["URGENT", "NOW", "!!!"],
-                "category": "phishing",
-                "priority": 4,
-                "should_reply": False,
-                "reply_keywords": [],
-                "description": "Phishing attempt - classify and discard"
-            },
-            {
-                "email_id": "med_2",
-                "sender": "colleague@company.com",
-                "subject": "Re: Project deadline - question about architecture",
-                "body": "I reviewed the proposal. The database schema in Section 3 might cause performance issues. Can we discuss alternatives? This needs resolving before Thursday.",
-                "is_spam": False,
-                "urgency_indicators": ["Thursday", "deadline"],
-                "category": "work_technical",
-                "priority": 4,
-                "should_reply": True,
-                "reply_keywords": ["database", "performance", "architecture"],
-                "description": "Urgent technical discussion in thread"
-            },
-            {
-                "email_id": "med_3",
-                "sender": "hr@company.com",
-                "subject": "Benefits enrollment deadline reminder",
-                "body": "Friendly reminder: Benefits enrollment closes December 31st. Please complete your enrollment: [link]",
-                "is_spam": False,
-                "urgency_indicators": ["deadline", "December 31"],
-                "category": "hr_admin",
-                "priority": 3,
-                "should_reply": False,
-                "reply_keywords": [],
-                "description": "Internal admin notice - archive"
-            }
-        ],
-        "hard": [
-            {
-                "email_id": "hard_1",
-                "sender": "customer-support@similar-company.net",
-                "subject": "We're so much better - Switch today!",
-                "body": "You should really consider switching to our service. We're cheaper and better. Call now: 1-800-SPAM123",
-                "is_spam": True,
-                "urgency_indicators": ["now", "cheaper"],
-                "category": "advertising_spam",
-                "priority": 1,
-                "should_reply": False,
-                "reply_keywords": [],
-                "description": "Subtle spam - looks legitimate but is solicitation"
-            },
-            {
-                "email_id": "hard_2",
-                "sender": "manager@company.com",
-                "subject": "FW: Customer complaint - HIGH PRIORITY",
-                "body": "I'm forwarding this complaint from a major customer. They claim our software caused data loss. " +
-                        "This is critical. The customer is considering legal action. " +
-                        "We need to investigate immediately and provide a response. " +
-                        "Customer contact: vip@client.com. They're expecting our response by tomorrow.",
-                "is_spam": False,
-                "urgency_indicators": ["HIGH PRIORITY", "critical", "immediately", "tomorrow"],
-                "category": "escalation_required",
-                "priority": 5,
-                "should_reply": True,
-                "reply_keywords": ["escalate", "investigation", "legal"],
-                "description": "Critical escalation - requires immediate action and investigation"
-            },
-            {
-                "email_id": "hard_3",
-                "sender": "analyst@company.com",
-                "subject": "Re: Quarterly revenue analysis - thoughts on Q2 projections?",
-                "body": "I've attached the Q2 revenue projections. " +
-                        "Looking at the data, there's an interesting anomaly in the APAC region. " +
-                        "Our growth projection assumes 15% YoY, but historical variance suggests we should be more conservative. " +
-                        "What are your thoughts? Also, should we flag the supply chain risks to the board? " +
-                        "I noticed our competitors are seeing margin compression.",
-                "is_spam": False,
-                "urgency_indicators": [],
-                "category": "internal_strategic",
-                "priority": 3,
-                "should_reply": True,
-                "reply_keywords": ["analysis", "projection", "strategic", "board"],
-                "description": "Strategic discussion with multiple issues - requires thoughtful multi-point reply"
-            }
-        ]
-    }
+    """Email triage environment with multi-step reasoning."""
 
     def __init__(self):
-        self._state = None
-        self.episode_id = str(uuid.uuid4())
-        self.current_difficulty = None
-        self.current_email = None
+        """Initialize environment."""
+        self.episode_id: Optional[str] = None
+        self.task_id: Optional[str] = None
+        self.current_state: Optional[StateSchema] = None
+        self.difficulty_config = {
+            "easy": {"max_steps": 3, "base_reward_per_step": 0.30},
+            "medium": {"max_steps": 4, "base_reward_per_step": 0.25},
+            "hard": {"max_steps": 5, "base_reward_per_step": 0.20},
+        }
+        self.email_bank = self._create_email_bank()
+
+    def _create_email_bank(self) -> Dict[str, List[Dict[str, Any]]]:
+        """Create a bank of sample emails for different difficulties."""
+        return {
+            "easy": [
+                {
+                    "email_id": "email_001",
+                    "sender": "newsletter@company.com",
+                    "subject": "Weekly newsletter",
+                    "body": "Here's this week's updates...",
+                    "timestamp": "2024-01-15T10:00:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": [],
+                },
+            ],
+            "medium": [
+                {
+                    "email_id": "email_002",
+                    "sender": "customer@example.com",
+                    "subject": "Product bug report",
+                    "body": "I found a bug in your software when trying to process large files. The system crashes and loses data.",
+                    "timestamp": "2024-01-15T14:30:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["urgent"],
+                },
+            ],
+            "hard": [
+                {
+                    "email_id": "email_003",
+                    "sender": "ceo@customer.com",
+                    "subject": "CRITICAL: System down, data loss reported",
+                    "body": "Our entire system is down and we've lost critical customer data. This is a critical emergency affecting 100+ clients.",
+                    "timestamp": "2024-01-15T16:45:00Z",
+                    "is_spam": False,
+                    "urgency_indicators": ["critical", "urgent", "data_loss"],
+                },
+            ],
+        }
 
     def reset(self, task_id: str = "easy") -> Dict[str, Any]:
-        """Reset environment and return initial state."""
-        if task_id not in self.EMAIL_SCENARIOS:
-            raise ValueError(f"Invalid task_id: {task_id}")
+        """Reset environment for a new episode."""
+        # Validate task_id
+        if task_id not in self.difficulty_config:
+            raise ValueError(f"Invalid task_id '{task_id}'. Must be one of: {list(self.difficulty_config.keys())}")
 
-        self.current_difficulty = task_id
-        scenarios = self.EMAIL_SCENARIOS[task_id]
+        self.task_id = task_id
+        self.episode_id = str(uuid.uuid4())
         
-        # Select random email from scenario
-        import random
-        email_data = random.choice(scenarios)
-        
-        self.current_email = EmailSchema(
-            email_id=email_data["email_id"],
-            sender=email_data["sender"],
-            subject=email_data["subject"],
-            body=email_data["body"],
-            timestamp=datetime.now(timezone.utc).isoformat(),
-            is_reply_to="",
-            is_spam=email_data.get("is_spam", False),
-            urgency_indicators=email_data.get("urgency_indicators", [])
-        )
+        config = self.difficulty_config[task_id]
+        email_list = self.email_bank.get(task_id, self.email_bank["easy"])
+        current_email = email_list[0] if email_list else {}
 
-        max_steps_map = {"easy": 3, "medium": 4, "hard": 5}
-
-        self._state = StateSchema(
-            task_id=str(uuid.uuid4()),
-            episode_id=str(uuid.uuid4()),
+        self.current_state = StateSchema(
+            task_id=task_id,
+            episode_id=self.episode_id,
             difficulty=task_id,
             step=0,
-            max_steps=max_steps_map[task_id],
-            current_email=self.current_email,
+            max_steps=config["max_steps"],
+            current_email=current_email,
             actions_taken=[],
             score=0.0,
             done=False,
             reward=0.0,
-            ground_truth={
-                "category": email_data["category"],
-                "priority": email_data["priority"],
-                "should_reply": email_data["should_reply"],
-                "description": email_data["description"]
-            }
+            step_rewards=[],
+            ground_truth=self._get_ground_truth(task_id),
         )
 
-        return self.state()
+        return self._get_state_dict()
+
+    def _get_ground_truth(self, task_id: str) -> Dict[str, Any]:
+        """Get ground truth actions for a task."""
+        ground_truths = {
+            "easy": {
+                "category": "newsletter",
+                "priority": 1,
+                "should_reply": False,
+                "actions": ["classify", "prioritize", "archive"],
+                "description": "Non-urgent newsletter that should be archived"
+            },
+            "medium": {
+                "category": "phishing",
+                "priority": 4,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "reply", "archive"],
+                "description": "Phishing attempt requiring user warning and escalation"
+            },
+            "hard": {
+                "category": "critical_incident",
+                "priority": 5,
+                "should_reply": True,
+                "actions": ["classify", "prioritize", "escalate", "reply", "archive"],
+                "description": "Critical data loss incident requiring immediate escalation to senior management"
+            },
+        }
+        return ground_truths.get(task_id, {
+            "category": "unknown",
+            "priority": 2,
+            "should_reply": False,
+            "actions": ["classify"],
+            "description": "Unknown email type"
+        })
+
+    def _get_state_dict(self) -> Dict[str, Any]:
+        """Convert state to dictionary."""
+        if not self.current_state:
+            return {}
+        
+        # Convert current_email to dict if it's a model instance
+        email_dict = self.current_state.current_email
+        if hasattr(email_dict, 'dict'):
+            email_dict = email_dict.dict()
+        
+        return {
+            "task_id": self.current_state.task_id,
+            "episode_id": self.current_state.episode_id,
+            "difficulty": self.current_state.difficulty,
+            "step": self.current_state.step,
+            "max_steps": self.current_state.max_steps,
+            "current_email": email_dict,
+            "actions_taken": self.current_state.actions_taken,
+            "score": round(self.current_state.score, 2),
+            "done": self.current_state.done,
+            "reward": round(self.current_state.reward, 2),
+            "step_rewards": [round(r, 2) for r in self.current_state.step_rewards],
+            "ground_truth": self.current_state.ground_truth,
+        }
+    
+    def state(self) -> Dict[str, Any]:
+        """Return current state."""
+        return self._get_state_dict()
 
     def step(self, action: Dict[str, Any]) -> Tuple[Dict[str, Any], float, bool, Dict[str, Any]]:
-        """Execute environment step and return (state, reward, done, info)."""
-        if self._state.done:
-            raise RuntimeError("Episode already done. Call reset() first.")
+        """Execute one step in the environment."""
+        if not self.current_state:
+            raise RuntimeError("Must call reset() first")
 
-        # Parse and validate action
-        try:
-            parsed_action = ActionSchema(**action)
-        except Exception as e:
-            # Invalid action format
-            reward = -0.5
-            parsed_action = action
-        else:
-            # Grade the action
-            from src.graders import EmailTriageGrader
-            
-            grader = EmailTriageGrader()
-            reward, grading_info = grader.grade_action(
-                action=parsed_action,
-                email=self.current_email,
-                ground_truth=self._state.ground_truth,
-                step_count=self._state.step + 1,
-                max_steps=self._state.max_steps
-            )
-            
-            info = {
-                "grading_details": grading_info,
-                "episode_id": self._state.episode_id,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "action_parsed": parsed_action.model_dump() if hasattr(parsed_action, 'model_dump') else parsed_action
-            }
+        self.current_state.step += 1
         
-        self._state.step += 1
-        self._state.actions_taken.append({
-            "step": self._state.step,
-            "action": parsed_action.model_dump() if hasattr(parsed_action, 'model_dump') else parsed_action,
-            "reward": reward
-        })
-        self._state.reward = reward
+        # Compute reward for this action
+        action_type = action.get("action_type", "unknown")
+        confidence = min(1.0, max(0.0, action.get("confidence", 0.5)))
         
-        # Accumulate score
-        self._state.score = sum(a["reward"] for a in self._state.actions_taken) / len(self._state.actions_taken)
-
-        # Episode ends when:
-        # 1. Max steps reached
-        # 2. Final action taken (reply, escalate, or archive)
-        action_type = action.get("action_type", "") if isinstance(action, dict) else getattr(action, "action_type", "")
-        is_final_action = action_type in ["reply", "escalate", "archive"]
-        
-        done = (
-            self._state.step >= self._state.max_steps
-            or is_final_action
+        # Check if this action is in the correct sequence
+        expected_actions = self.current_state.ground_truth.get("actions", [])
+        is_correct_sequence = (
+            self.current_state.step - 1 < len(expected_actions) and
+            action_type == expected_actions[self.current_state.step - 1]
         )
-        self._state.done = done
-
-        return self.state(), reward, done, info
-
-    def state(self) -> Dict[str, Any]:
-        """Return current state as dictionary."""
-        return json.loads(self._state.model_dump_json())
-
-    def render(self) -> str:
-        """Return state as formatted JSON."""
-        return json.dumps(self.state(), indent=2)
-
-
-if __name__ == "__main__":
-    env = EmailTriageEnv()
-    state = env.reset("easy")
-    print("Initial state:", json.dumps(state, indent=2))
-
-    action = {
-        "action_type": "classify",
-        "target_category": "sales_inquiry",
-        "priority_level": 2,
-        "confidence": 0.95
-    }
-
-    state, reward, done, info = env.step(action)
-    print(f"\nScore: {state['score']}")
-    print(f"Reward: {reward}")
-    print(f"Done: {done}")
-
-
-
-if __name__ == "__main__":
-    env = CodeTestGenerationEnv()
-    state = env.reset("easy")
-    print("Initial state:", json.dumps(state, indent=2))
-
-    tests = '''import pytest
-from main import add
-
-def test_add_positive():
-    assert add(2, 3) == 5
-
-def test_add_negative():
-    assert add(-1, -1) == -2
-
-def test_add_zero():
-    assert add(0, 0) == 0
-
-def test_add_mixed():
-    assert add(5, -3) == 2
-'''
-
-    state, reward, done, info = env.step(tests)
-    print(f"\nScore: {state['score']}")
-    print(f"Reward: {reward}")
-    print(f"Done: {done}")
+        
+        # Compute reward based on sequence correctness
+        if not is_correct_sequence:
+            # Out-of-sequence penalty (fixed at -0.10)
+            step_reward = -0.10
+        else:
+            # Base reward from action quality
+            base_reward = self.difficulty_config[self.current_state.difficulty]["base_reward_per_step"]
+            step_reward = base_reward * confidence  # Reward scaled by confidence [0, base_reward]
+        
+        # Clamp to [-0.10, 1.0]
+        step_reward = max(-0.10, min(1.0, step_reward))
+        
+        self.current_state.reward = step_reward
+        self.current_state.step_rewards.append(step_reward)
+        self.current_state.actions_taken.append({
+            "step": self.current_state.step,
+            "action": action_type,
+            "reward": step_reward,
+            "is_correct_sequence": is_correct_sequence,
+        })
+        
+        # Update cumulative score (normalized, only counting positive rewards)
+        total_reward = sum(max(0, r) for r in self.current_state.step_rewards)
+        self.current_state.score = min(1.0, total_reward)  # Cap at 1.0
+        
+        # Check if episode is done
+        done = (
+            self.current_state.step >= self.current_state.max_steps
+            or action_type == "archive"  # Terminal action
+        )
+        
+        self.current_state.done = done
+        
+        return (
+            self._get_state_dict(),
+            step_reward,
+            done,
+            {
+                "action_type": action_type,
+                "step": self.current_state.step,
+                "max_steps": self.current_state.max_steps,
+                "is_correct_sequence": is_correct_sequence,
+            },
+        )

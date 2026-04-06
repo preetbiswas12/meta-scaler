@@ -3,7 +3,7 @@
 import json
 import sys
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 
 
@@ -37,13 +37,13 @@ class LLMFineTuner:
 class OpenAIFineTuner(LLMFineTuner):
     """Fine-tune models via OpenAI API."""
     
-    def __init__(self, model: str, training_data: str, api_key: str = None):
+    def __init__(self, model: str, training_data: str, api_key: Optional[str] = None):
         super().__init__("openai", model, training_data)
         import os
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OPENAI_API_KEY not found in environment")
-        self.client = None
+        self.client: Any = None
         self._init_client()
     
     def _init_client(self):
@@ -123,16 +123,15 @@ class OpenAIFineTuner(LLMFineTuner):
             "model": self.model,
             "fine_tuned_model": job.fine_tuned_model,
             "created_at": job.created_at,
-            "updated_at": job.updated_at,
             "training_file": job.training_file
         }
         
         return status
     
-    def get_model_name(self) -> str:
+    def get_model_name(self) -> Optional[str]:
         """Get the fine-tuned model name."""
         job = self.client.fine_tuning.jobs.retrieve(self.job_id)
-        return job.fine_tuned_model or None
+        return job.fine_tuned_model
 
 
 class LocalFineTuner(LLMFineTuner):

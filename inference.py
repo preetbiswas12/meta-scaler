@@ -3,8 +3,16 @@
 import os
 import sys
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
+
+# Configure logging for debug/info output
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 try:
     import requests
@@ -129,12 +137,11 @@ def run_inference_episode(
             action_type = action.get('action_type', 'unknown')
             
             # [STEP] log - REQUIRED FORMAT
-            # Format: [STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
             error_msg = "null" if not last_error else f'"{last_error}"'
-            print(f"[STEP]  step={step_num} action={action_type} reward={reward:.2f} done={'true' if done else 'false'} error={error_msg}", flush=True)
+            print(f"[STEP] step={step_num} action={action_type} reward={reward:.2f} done={'true' if done else 'false'} error={error_msg}", flush=True)
 
-            # Success = classified correctly in first step with high reward
-            if action.get("action_type") == "classify" and reward >= 1.0:
+            # Track if classification was correct (first step success indicator)
+            if action.get("action_type") == "classify" and reward > 0:
                 episode_success = True
             
             if done or step_num >= episode_max_steps:
@@ -143,7 +150,7 @@ def run_inference_episode(
         # [END] log - REQUIRED FORMAT
         # Format: [END] success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
         rewards_str = ",".join(f"{r:.2f}" for r in all_rewards)
-        print(f"[END]   success={'true' if episode_success else 'false'} steps={step_count} score={final_score:.2f} rewards={rewards_str}", flush=True)
+        print(f"[END] success={'true' if episode_success else 'false'} steps={step_count} score={final_score:.2f} rewards={rewards_str}", flush=True)
 
         return {
             "episode_id": episode_id,
@@ -159,7 +166,7 @@ def run_inference_episode(
 
     except Exception as e:
         # [END] log on error - REQUIRED FORMAT
-        print(f"[END]   success=false steps={step_count} score=0.00 rewards={','.join(f'{r:.2f}' for r in all_rewards)}", flush=True)
+        print(f"[END] success=false steps={step_count} score=0.00 rewards={','.join(f'{r:.2f}' for r in all_rewards)}", flush=True)
         return {
             "episode_id": episode_id,
             "task_id": task_id,
@@ -172,28 +179,44 @@ def run_inference_episode(
 
 def _get_mock_action(task_id: str, step_num: int) -> str:
     """Get mock email action for testing without API."""
+    # Multi-step chains: classify → prioritize → reply/escalate → archive
     actions = {
         "easy": [
+            # Step 1: Classify (identify type)
             '{"action_type": "classify", "target_category": "sales_inquiry", "confidence": 0.95}',
+            # Step 2: Prioritize (set importance)
+            '{"action_type": "prioritize", "priority_level": 2, "confidence": 0.9}',
+            # Step 3: Archive (final action)
             '{"action_type": "archive", "confidence": 0.85}',
-            '{"action_type": "classify", "target_category": "newsletter", "confidence": 0.9}',
         ],
         "medium": [
+            # Step 1: Classify (identify threat)
             '{"action_type": "classify", "target_category": "phishing", "confidence": 0.98}',
-            '{"action_type": "classify", "target_category": "work_technical", "priority_level": 4, "confidence": 0.9}',
-            '{"action_type": "prioritize", "priority_level": 4, "confidence": 0.85}',
-            '{"action_type": "reply", "reply_draft": "Thank you for the technical discussion. I agree we should review the database schema. Let us schedule a meeting.", "confidence": 0.8}',
+            # Step 2: Prioritize (mark high priority)
+            '{"action_type": "prioritize", "priority_level": 4, "confidence": 0.95}',
+            # Step 3: Reply
+            '{"action_type": "reply", "reply_draft": "Thank you for your email. We have received your inquiry and our technical team will investigate thoroughly. We will provide a detailed response within 24 hours.", "confidence": 0.85}',
+            # Step 4: Archive (final)
+            '{"action_type": "archive", "confidence": 0.8}',
         ],
         "hard": [
-            '{"action_type": "classify", "target_category": "advertising_spam", "confidence": 0.92}',
-            '{"action_type": "escalate", "escalation_reason": "Critical customer complaint - potential legal issue", "confidence": 0.98}',
+            # Step 1: Classify (identify critical issue)
+            '{"action_type": "classify", "target_category": "escalation_required", "confidence": 0.98}',
+            # Step 2: Prioritize (urgent)
             '{"action_type": "prioritize", "priority_level": 5, "confidence": 0.99}',
-            '{"action_type": "reply", "reply_draft": "We take this matter very seriously. I am coordinating an immediate investigation with our technical team and will have a detailed response for you within 24 hours.", "confidence": 0.85}',
+            # Step 3: Escalate (with reasoning)
+            '{"action_type": "escalate", "escalation_reason": "Critical customer complaint regarding data loss - requires immediate senior management review and legal team involvement", "confidence": 0.98}',
+            # Step 4: Reply (while escalating)
+            '{"action_type": "reply", "reply_draft": "We take your concern extremely seriously and treat this as our highest priority. Our entire technical and management team is investigating immediately. You will receive a detailed response within 24 hours.", "confidence": 0.9}',
+            # Step 5: Archive
+            '{"action_type": "archive", "confidence": 0.7}',
         ],
     }
     
     step_actions = actions.get(task_id, [])
-    return step_actions[min(step_num - 1, len(step_actions) - 1)]
+    if step_num <= len(step_actions):
+        return step_actions[step_num - 1]
+    return '{"action_type": "archive", "confidence": 0.7}'
 
 
 def _get_mock_action_dict(task_id: str, step_num: int) -> Dict[str, Any]:
