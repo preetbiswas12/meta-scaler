@@ -28,13 +28,18 @@ app = Flask(__name__)
 # In production, use Redis or persistent DB
 _sessions: Dict[str, Dict[str, Any]] = {}
 
-# Initialize OpenAI client (optional)
+# Initialize OpenAI client (optional - handle errors gracefully)
 _llm_client: Optional[OpenAIClient] = None
 try:
     _llm_client = OpenAIClient()
     logger.info("✓ OpenAI client initialized")
+except ValueError as e:
+    # Expected when API key not set - this is OK
+    logger.info(f"ℹ OpenAI client not initialized: {e}")
+    _llm_client = None
 except Exception as e:
-    logger.warning(f"⚠ OpenAI client failed: {e}")
+    # Unexpected error - log but don't crash
+    logger.warning(f"⚠ OpenAI client failed unexpectedly: {e}")
     _llm_client = None
 
 
