@@ -12,9 +12,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY config/ config/
 COPY src/ src/
+COPY server/ server/
 COPY inference.py .
 COPY app.py .
 COPY README.md .
+COPY openenv.yaml .
+COPY pyproject.toml .
 COPY data/ data/
 
 ENV PYTHONUNBUFFERED=1

@@ -1,0 +1,39 @@
+version = 4
+requires-python = ">=3.11"
+
+[[package]]
+name = "openenv"
+version = "0.2.0"
+requires-python = ">=3.11"
+
+[[package]]
+name = "pydantic"
+version = "1.10.12"
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+
+[[package]]
+name = "python-dotenv"
+version = "1.0.0"
+
+[[package]]
+name = "flask"
+version = "3.0.0"
+
+[[package]]
+name = "gunicorn"
+version = "21.2.0"
+
+[[package]]
+name = "pyyaml"
+version = "6.0.1"
+
+[[package]]
+name = "pytest"
+version = "7.4.3"
+
+[[package]]
+name = "pytest-cov"
+version = "4.1.0"
