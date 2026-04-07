@@ -2,11 +2,6 @@ version = 4
 requires-python = ">=3.11"
 
 [[package]]
-name = "openenv"
-version = "0.1.13"
-requires-python = ">=3.11"
-
-[[package]]
 name = "pydantic"
 version = "1.10.12"
 
