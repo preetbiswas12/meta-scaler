@@ -273,14 +273,22 @@ def main():
     model_name = os.getenv("MODEL_NAME", "baseline")
     benchmark_name = "email-triage"
 
+    # IMPORTANT: Always try to initialize API client with validator-injected credentials
+    # Validator injects API_BASE_URL and API_KEY at runtime
     client = None
-    if args.use_api:
-        try:
-            client = OpenAIClient()
-            logger.info(f"[INFO] Connected to API at {client.base_url} with model {client.model_name}")
-        except ValueError as e:
-            logger.warning(f"[WARNING] Failed to initialize API client: {e}")
-            logger.info("[INFO] Falling back to mock tests")
+    try:
+        client = OpenAIClient()
+        logger.info(f"[INFO] Initialized API client for {client.model_name}")
+        logger.info(f"[INFO] API Base URL: {client.base_url}")
+        logger.info(f"[INFO] Using API_KEY from environment")
+    except ValueError as e:
+        # Only use mock if API key not available (expected in some environments)
+        logger.warning(f"[WARNING] API client unavailable: {e}")
+        if args.use_api:
+            # If --use-api was explicitly requested, fail loudly
+            logger.error("[ERROR] --use-api flag requires API credentials!")
+            sys.exit(1)
+        logger.info("[INFO] Falling back to mock tests")
 
     env = EmailTriageEnv()
     results = []

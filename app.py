@@ -167,16 +167,17 @@ def run_episode():
     
     Query params:
         task_id: "easy", "medium", "hard" (default: "easy")
-        use_llm: true/false (default: false - use mock actions)
+        use_llm: true/false (default: true - use LLM client if available)
     
     Returns: Episode results
     """
     try:
         task_id = request.args.get("task_id", "easy")
-        use_llm = request.args.get("use_llm", "false").lower() == "true"
+        use_llm = request.args.get("use_llm", "true").lower() == "true"
         
-        # Run episode
+        # Run episode with LLM client if available
         env = EmailTriageEnv()
+        # IMPORTANT: Use LLM client by default if available (validator-injected credentials)
         client = _llm_client if use_llm else None
         
         results = run_inference_episode(
