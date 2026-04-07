@@ -122,9 +122,12 @@ def run_inference_episode(
                 action_json = _get_mock_action(task_id, step_num)
             else:
                 try:
+                    # CRITICAL: Make actual API call to validator's LiteLLM proxy
                     action_json = client.generate_email_action(system_prompt, user_prompt)
+                    logger.info(f"[API CALL] Successfully called {client.model_name} at {client.base_url}")
                 except RuntimeError as e:
                     last_error = str(e)
+                    logger.error(f"[API CALL FAILED] {e}")
                     action_json = _get_mock_action(task_id, step_num)
 
             # Parse action
@@ -273,8 +276,10 @@ def main():
     model_name = os.getenv("MODEL_NAME", "baseline")
     benchmark_name = "email-triage"
 
-    # IMPORTANT: Always try to initialize API client with validator-injected credentials
-    # Validator injects API_BASE_URL and API_KEY at runtime
+    # CRITICAL: Check if validator has injected API_KEY
+    # If API_KEY is present, we MUST use it (fail hard if we can't)
+    api_key_provided = bool(os.getenv("API_KEY"))
+    
     client = None
     try:
         client = OpenAIClient()
@@ -282,13 +287,15 @@ def main():
         logger.info(f"[INFO] API Base URL: {client.base_url}")
         logger.info(f"[INFO] Using API_KEY from environment")
     except ValueError as e:
-        # Only use mock if API key not available (expected in some environments)
-        logger.warning(f"[WARNING] API client unavailable: {e}")
-        if args.use_api:
-            # If --use-api was explicitly requested, fail loudly
-            logger.error("[ERROR] --use-api flag requires API credentials!")
+        if api_key_provided:
+            # CRITICAL: Validator provided API_KEY but we can't use it - FAIL HARD
+            logger.error(f"[ERROR] CRITICAL: API_KEY provided but OpenAIClient failed: {e}")
+            logger.error("[ERROR] Cannot fall back to mock when validator provided API_KEY!")
             sys.exit(1)
-        logger.info("[INFO] Falling back to mock tests")
+        else:
+            # No API key provided - use mock mode (local testing)
+            logger.warning(f"[WARNING] API client unavailable: {e}")
+            logger.info("[INFO] Falling back to mock tests (no validator API_KEY provided)")
 
     env = EmailTriageEnv()
     results = []
