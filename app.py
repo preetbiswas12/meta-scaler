@@ -268,7 +268,8 @@ def internal_error(e):
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
+    # Only runs when executed directly, not when run with gunicorn
+    port = int(os.getenv("PORT", 7860))
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
     
     logger.info(f"Starting EmailTriageEnv API on port {port}")
@@ -276,3 +277,7 @@ if __name__ == "__main__":
     logger.info(f"LLM client available: {_llm_client is not None}")
     
     app.run(host="0.0.0.0", port=port, debug=debug)
+else:
+    # When run with gunicorn
+    logger.info(f"EmailTriageEnv API initialized (gunicorn)")
+    logger.info(f"LLM client available: {_llm_client is not None}")
