@@ -26,7 +26,7 @@ ENV PORT=7860
 
 EXPOSE 7860
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD curl -f http://localhost:7860/health || exit 1
 
 # Start with gunicorn - use 4 workers for concurrency
