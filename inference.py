@@ -27,13 +27,19 @@ class OpenAIClient:
     """OpenAI-compatible client for LLM inference."""
 
     def __init__(self):
+        # IMPORTANT: Use API_KEY injected by validator (LiteLLM proxy)
+        # Fall back to other env vars for local development
         self.base_url = os.getenv("API_BASE_URL", "https://api.openai.com/v1").rstrip("/")
         self.model_name = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
-        self.api_key = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY")
+        self.api_key = (
+            os.getenv("API_KEY") or  # Validator-injected key (priority)
+            os.getenv("OPENAI_API_KEY") or  # Fallback: explicit OpenAI key
+            os.getenv("HF_TOKEN")  # Fallback: HF token
+        )
         self.timeout = 30
 
         if not self.api_key:
-            raise ValueError("API key not set (HF_TOKEN or OPENAI_API_KEY)")
+            raise ValueError("API key not set (API_KEY, OPENAI_API_KEY, or HF_TOKEN required)")
 
     def generate_email_action(self, system_prompt: str, user_prompt: str) -> str:
         """Call LLM API and return response."""
