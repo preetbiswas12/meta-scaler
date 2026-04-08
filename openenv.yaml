@@ -72,7 +72,7 @@ graders:
         type: "boolean"
       - name: "step_reward"
         type: "float"
-        range: [0.0, 1.0]
+        range: (0.0, 1.0)
     
   - id: "medium_grader"
     name: "Medium Task Grader"
@@ -84,10 +84,10 @@ graders:
         type: "boolean"
       - name: "sequence_quality"
         type: "float"
-        range: [0.0, 1.0]
+        range: (0.0, 1.0)
       - name: "step_reward"
         type: "float"
-        range: [0.0, 1.0]
+        range: (0.0, 1.0)
     
   - id: "hard_grader"
     name: "Hard Task Grader"
@@ -99,26 +99,26 @@ graders:
         type: "boolean"
       - name: "sequence_quality"
         type: "float"
-        range: [0.0, 1.0]
+        range: (0.0, 1.0)
       - name: "reasoning_quality"
         type: "float"
-        range: [0.0, 1.0]
+        range: (0.0, 1.0)
       - name: "step_reward"
         type: "float"
-        range: [0.0, 1.0]
+        range: (0.0, 1.0)
 
 metrics:
   - name: "score"
     type: "float"
-    range: [0.0, 1.0]
+    range: (0.0, 1.0)
   - name: "reward"
     type: "float"
-    range: [0.0, 1.0]
+    range: (0.0, 1.0)
   - name: "step_count"
     type: "integer"
   - name: "actions_quality"
     type: "float"
-    range: [0.0, 1.0]
+    range: (0.0, 1.0)
 
 deployment:
   resources:

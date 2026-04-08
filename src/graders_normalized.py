@@ -89,8 +89,9 @@ class EmailTriageGrader:
         # Compute reward: weight * quality
         reward = step_weight * quality_multiplier
 
-        # Final bounds check [0, 1]
-        reward = max(0.0, min(1.0, reward))
+        # Clamp to (0.001, 0.999) - strictly between 0 and 1, not inclusive
+        # Validator requires scores strictly in range (0, 1), not [0, 1]
+        reward = max(0.001, min(0.999, reward))
 
         return reward
 
@@ -110,16 +111,16 @@ class EmailTriageGrader:
             Final score in [0.0, 1.0]
         """
         if not step_rewards:
-            return 0.0
+            return 0.5  # Default to middle of valid range if no rewards
 
-        # Normalize step rewards
-        step_rewards = [max(0.0, min(1.0, r)) for r in step_rewards]
+        # Normalize step rewards to (0.001, 0.999)
+        step_rewards = [max(0.001, min(0.999, r)) for r in step_rewards]
 
         # Sum rewards (may exceed 1.0)
         total_reward = sum(step_rewards)
 
-        # Apply final normalization: cap at 1.0
-        final_score = min(1.0, total_reward)
+        # Apply final normalization: cap at 0.999 (strictly less than 1.0)
+        final_score = min(0.999, max(0.001, total_reward))
 
         return final_score
 
@@ -130,6 +131,7 @@ class EmailTriageGrader:
     ) -> Dict[str, Any]:
         """
         Validate that rewards and scores are properly bounded.
+        Validator requires scores STRICTLY between 0 and 1 (not inclusive).
 
         Args:
             reward: Step reward value
@@ -138,15 +140,16 @@ class EmailTriageGrader:
         Returns:
             Validation result dict
         """
-        is_reward_valid = 0.0 <= reward <= 1.0
-        is_score_valid = 0.0 <= score <= 1.0
+        # Scores must be strictly between 0 and 1 (exclusive on both ends)
+        is_reward_valid = 0.0 < reward < 1.0
+        is_score_valid = 0.0 < score < 1.0
 
         return {
             "reward_valid": is_reward_valid,
             "score_valid": is_score_valid,
             "all_valid": is_reward_valid and is_score_valid,
-            "reward_range": f"[{max(0.0, reward):.2f}, {min(1.0, reward):.2f}]",
-            "score_range": f"[{max(0.0, score):.2f}, {min(1.0, score):.2f}]",
+            "reward_range": f"({reward:.4f})",
+            "score_range": f"({score:.4f})",
         }
 
     def grade_action(

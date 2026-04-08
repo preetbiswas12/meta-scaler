@@ -439,8 +439,9 @@ class EmailTriageEnv:
         })
         
         # Update cumulative score (normalized, only counting positive rewards)
-        total_reward = sum(max(0, r) for r in self.current_state.step_rewards)
-        self.current_state.score = min(1.0, total_reward)  # Cap at 1.0
+        # Validator requires scores strictly in range (0, 1), not [0, 1]
+        total_reward = sum(max(0.001, r) for r in self.current_state.step_rewards)
+        self.current_state.score = min(0.999, max(0.001, total_reward))  # Keep in (0.001, 0.999)
         
         # Check if episode is done
         done = (
