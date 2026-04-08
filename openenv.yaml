@@ -41,6 +41,7 @@ tasks:
     name: "Basic Email Triage"
     description: "Triage simple emails with straightforward actions"
     difficulty: "easy"
+    grader: "action_quality"
     grader_type: "deterministic"
     max_steps: 3
     
@@ -48,6 +49,7 @@ tasks:
     name: "Complex Email Handling"
     description: "Handle complex emails requiring multiple actions and judgment"
     difficulty: "medium"
+    grader: "action_quality"
     grader_type: "deterministic"
     max_steps: 4
     
@@ -55,6 +57,7 @@ tasks:
     name: "Critical Issue Management"
     description: "Handle critical emails requiring escalation and careful coordination"
     difficulty: "hard"
+    grader: "action_quality"
     grader_type: "deterministic"
     max_steps: 5
 
