@@ -7,6 +7,7 @@ import uuid
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
+from .graders_normalized import EmailTriageGrader
 
 
 class EmailSchema(BaseModel):
@@ -404,7 +405,7 @@ class EmailTriageEnv:
 
         self.current_state.step += 1
         
-        # Compute reward for this action
+        # Compute reward for this action using the grader
         action_type = action.get("action_type", "unknown")
         confidence = min(1.0, max(0.0, action.get("confidence", 0.5)))
         
@@ -415,17 +416,18 @@ class EmailTriageEnv:
             action_type == expected_actions[self.current_state.step - 1]
         )
         
-        # Compute reward based on sequence correctness
+        # GRADER: Use EmailTriageGrader to compute step reward
         if not is_correct_sequence:
-            # Out-of-sequence penalty (fixed at -0.10)
-            step_reward = -0.10
+            # Out-of-sequence penalty from grader
+            step_reward = EmailTriageGrader.OUT_OF_SEQUENCE_PENALTY
         else:
-            # Base reward from action quality
-            base_reward = self.difficulty_config[self.current_state.difficulty]["base_reward_per_step"]
-            step_reward = base_reward * confidence  # Reward scaled by confidence [0, base_reward]
-        
-        # Clamp to [-0.10, 1.0]
-        step_reward = max(-0.10, min(1.0, step_reward))
+            # Use grader to compute reward based on difficulty and confidence
+            step_reward = EmailTriageGrader.compute_step_reward(
+                difficulty=self.current_state.difficulty,
+                step_number=self.current_state.step,
+                action_type=action_type,
+                confidence=confidence,
+            )
         
         self.current_state.reward = step_reward
         self.current_state.step_rewards.append(step_reward)
