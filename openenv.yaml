@@ -41,7 +41,7 @@ tasks:
     name: "Basic Email Triage"
     description: "Triage simple emails with straightforward actions"
     difficulty: "easy"
-    grader: "action_quality"
+    grader: "easy_grader"
     grader_type: "deterministic"
     max_steps: 3
     
@@ -49,7 +49,7 @@ tasks:
     name: "Complex Email Handling"
     description: "Handle complex emails requiring multiple actions and judgment"
     difficulty: "medium"
-    grader: "action_quality"
+    grader: "medium_grader"
     grader_type: "deterministic"
     max_steps: 4
     
@@ -57,18 +57,55 @@ tasks:
     name: "Critical Issue Management"
     description: "Handle critical emails requiring escalation and careful coordination"
     difficulty: "hard"
-    grader: "action_quality"
+    grader: "hard_grader"
     grader_type: "deterministic"
     max_steps: 5
 
 graders:
-  - id: "action_quality"
+  - id: "easy_grader"
+    name: "Easy Task Grader"
     type: "deterministic"
+    description: "Grader for basic email triage tasks"
+    task_id: "easy"
     metrics:
-      - "action_correctness"
-      - "sequence_quality"
-      - "reasoning_quality"
-      - "step_reward"
+      - name: "action_correctness"
+        type: "boolean"
+      - name: "step_reward"
+        type: "float"
+        range: [0.0, 1.0]
+    
+  - id: "medium_grader"
+    name: "Medium Task Grader"
+    type: "deterministic"
+    description: "Grader for complex email handling tasks"
+    task_id: "medium"
+    metrics:
+      - name: "action_correctness"
+        type: "boolean"
+      - name: "sequence_quality"
+        type: "float"
+        range: [0.0, 1.0]
+      - name: "step_reward"
+        type: "float"
+        range: [0.0, 1.0]
+    
+  - id: "hard_grader"
+    name: "Hard Task Grader"
+    type: "deterministic"
+    description: "Grader for critical issue management tasks"
+    task_id: "hard"
+    metrics:
+      - name: "action_correctness"
+        type: "boolean"
+      - name: "sequence_quality"
+        type: "float"
+        range: [0.0, 1.0]
+      - name: "reasoning_quality"
+        type: "float"
+        range: [0.0, 1.0]
+      - name: "step_reward"
+        type: "float"
+        range: [0.0, 1.0]
 
 metrics:
   - name: "score"
