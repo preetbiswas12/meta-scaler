@@ -1,4 +1,19 @@
 from typing import Dict, Any, List, Tuple, Optional
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Epsilon for clamping to (0, 1) exclusive - avoids exact boundaries
+EPSILON = 1e-6
+
+def clamp_score(score: float, label: str = "score") -> float:
+    """Clamp score to (0, 1) exclusive using epsilon. Logs if out of range was detected."""
+    if score <= 0.0 or score >= 1.0:
+        logger.warning(f"[INVALID SCORE DETECTED] {label}={score:.10f} before clamping")
+    clamped = max(EPSILON, min(1.0 - EPSILON, float(score)))
+    if clamped != score:
+        logger.debug(f"[CLAMPED] {label}: {score:.10f} -> {clamped:.10f}")
+    return clamped
 
 
 class EmailTriageGrader:
@@ -34,8 +49,8 @@ class EmailTriageGrader:
         "high": 1.0,  # confidence > 0.7
     }
     
-    # Out-of-sequence penalty
-    OUT_OF_SEQUENCE_PENALTY = -0.10
+    # Out-of-sequence penalty (clamped to valid range)
+    OUT_OF_SEQUENCE_PENALTY = 0.05  # Small positive penalty, not negative
 
     @staticmethod
     def get_quality_multiplier(confidence: float) -> float:
@@ -89,9 +104,8 @@ class EmailTriageGrader:
         # Compute reward: weight * quality
         reward = step_weight * quality_multiplier
 
-        # Clamp to (0.001, 0.999) - strictly between 0 and 1, not inclusive
-        # Validator requires scores strictly in range (0, 1), not [0, 1]
-        reward = max(0.001, min(0.999, reward))
+        # Clamp to (EPSILON, 1-EPSILON) - strictly between 0 and 1
+        reward = clamp_score(reward, f"step_reward[{difficulty}_{step_number}]")
 
         return reward
 
@@ -111,16 +125,16 @@ class EmailTriageGrader:
             Final score in [0.0, 1.0]
         """
         if not step_rewards:
-            return 0.5  # Default to middle of valid range if no rewards
+            return clamp_score(0.5, "final_score[no_rewards]")  # Default to middle of valid range
 
-        # Normalize step rewards to (0.001, 0.999)
-        step_rewards = [max(0.001, min(0.999, r)) for r in step_rewards]
+        # Normalize each step reward to (EPSILON, 1-EPSILON)
+        clamped_rewards = [clamp_score(r, f"step_reward[{i}]") for i, r in enumerate(step_rewards)]
 
         # Sum rewards (may exceed 1.0)
-        total_reward = sum(step_rewards)
+        total_reward = sum(clamped_rewards)
 
-        # Apply final normalization: cap at 0.999 (strictly less than 1.0)
-        final_score = min(0.999, max(0.001, total_reward))
+        # Apply final clamping: ensure strictly in (0, 1)
+        final_score = clamp_score(total_reward, "final_score[summed]")
 
         return final_score
 
@@ -143,13 +157,19 @@ class EmailTriageGrader:
         # Scores must be strictly between 0 and 1 (exclusive on both ends)
         is_reward_valid = 0.0 < reward < 1.0
         is_score_valid = 0.0 < score < 1.0
+        
+        # Log if invalid
+        if not is_reward_valid:
+            logger.warning(f"[INVALID] reward={reward:.10f} not in (0, 1)")
+        if not is_score_valid:
+            logger.warning(f"[INVALID] score={score:.10f} not in (0, 1)")
 
         return {
             "reward_valid": is_reward_valid,
             "score_valid": is_score_valid,
             "all_valid": is_reward_valid and is_score_valid,
-            "reward_range": f"({reward:.4f})",
-            "score_range": f"({score:.4f})",
+            "reward_range": f"({reward:.10f})",
+            "score_range": f"({score:.10f})",
         }
 
     def grade_action(

@@ -21,6 +21,7 @@ except ImportError:
     sys.exit(1)
 
 from src.environment import EmailTriageEnv, ActionSchema
+from src.graders_normalized import clamp_score, EPSILON
 
 
 # Task-to-Grader mapping (must match openenv.yaml)
@@ -150,6 +151,9 @@ def run_inference_episode(
             total_reward += reward
             all_rewards.append(reward)
             final_score = state["score"]
+            
+            # CRITICAL: Clamp final_score to (EPSILON, 1-EPSILON)
+            final_score = clamp_score(final_score, f"inference_score[step_{step_count}]")
 
             action_type = action.get('action_type', 'unknown')
             
@@ -166,6 +170,8 @@ def run_inference_episode(
 
         # [END] log - REQUIRED FORMAT
         # Format: [END] success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
+        # Ensure final_score is clamped
+        final_score = clamp_score(final_score, "final_score[episode_end]")
         rewards_str = ",".join(f"{r:.2f}" for r in all_rewards)
         print(f"[END] success={'true' if episode_success else 'false'} steps={step_count} score={final_score:.2f} rewards={rewards_str}", flush=True)
 
@@ -177,9 +183,9 @@ def run_inference_episode(
             "task_id": task_id,
             "grader_id": grader_id,  # CRITICAL: Validator needs to see which grader evaluated this task
             "steps": step_count,
-            "final_score": final_score,
+            "final_score": clamp_score(final_score, "return_final_score"),  # Ensure clamped on return
             "total_reward": total_reward,
-            "avg_reward": total_reward / step_count if step_count > 0 else 0.0,
+            "avg_reward": total_reward / step_count if step_count > 0 else 0.5,
             "success": episode_success,
             "completed": state.get("done", False),
             "rewards": all_rewards,
@@ -187,13 +193,15 @@ def run_inference_episode(
 
     except Exception as e:
         # [END] log on error - REQUIRED FORMAT
-        print(f"[END] success=false steps={step_count} score=0.00 rewards={','.join(f'{r:.2f}' for r in all_rewards)}", flush=True)
+        error_score = clamp_score(0.5, "error_score")  # Default to 0.5 on error
+        print(f"[END] success=false steps={step_count} score={error_score:.2f} rewards={','.join(f'{r:.2f}' for r in all_rewards)}", flush=True)
         grader_id = TASK_GRADER_MAP.get(task_id, "unknown_grader")
         return {
             "episode_id": episode_id,
             "task_id": task_id,
             "grader_id": grader_id,  # Include grader even on error
             "error": str(e),
+            "final_score": error_score,  # Include clamped score on error
             "completed": False,
             "success": False,
         }

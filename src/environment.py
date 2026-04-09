@@ -4,10 +4,13 @@ OpenEnv-compliant multi-step reasoning with normalized grading.
 """
 import json
 import uuid
+import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime, timezone
 from pydantic import BaseModel, Field
-from .graders_normalized import EmailTriageGrader
+from .graders_normalized import EmailTriageGrader, clamp_score, EPSILON
+
+logger = logging.getLogger(__name__)
 
 
 class EmailSchema(BaseModel):
@@ -41,9 +44,9 @@ class StateSchema(BaseModel):
     max_steps: int = 5
     current_email: Dict[str, Any]
     actions_taken: List[Dict[str, Any]] = Field(default_factory=list)
-    score: float = 0.5  # Default to 0.5 (middle of valid range) - must be in (0, 1)
+    score: float = Field(default=0.5, description="Must be in (0, 1)")  # Default to 0.5 (middle - epsilon of bound)
     done: bool = False
-    reward: float = 0.5  # Default to 0.5 (middle of valid range) - must be in (0, 1)
+    reward: float = Field(default=0.5, description="Must be in (0, 1)")  # Default to 0.5 (middle - epsilon of bound)
     ground_truth: Dict[str, Any] = Field(default_factory=dict)
     step_rewards: List[float] = Field(default_factory=list)
 
@@ -206,6 +209,10 @@ class EmailTriageEnv:
         # Select random email from the list for variety
         current_email = random.choice(email_list) if email_list else {}
 
+        # Initialize scores - must clamp to (EPSILON, 1-EPSILON)
+        initial_score = clamp_score(0.5, f"initial_score[{task_id}]")
+        initial_reward = clamp_score(0.5, f"initial_reward[{task_id}]")
+
         self.current_state = StateSchema(
             task_id=task_id,
             episode_id=self.episode_id,
@@ -214,9 +221,9 @@ class EmailTriageEnv:
             max_steps=config["max_steps"],
             current_email=current_email,
             actions_taken=[],
-            score=0.5,  # Initialize to 0.5 (middle of valid range) - must be in (0, 1)
+            score=initial_score,  # Explicitly clamped
             done=False,
-            reward=0.5,  # Initialize to 0.5 (middle of valid range) - must be in (0, 1)
+            reward=initial_reward,  # Explicitly clamped
             step_rewards=[],
             ground_truth=self._get_ground_truth(current_email, task_id),
         )
@@ -418,8 +425,10 @@ class EmailTriageEnv:
         
         # GRADER: Use EmailTriageGrader to compute step reward
         if not is_correct_sequence:
-            # Out-of-sequence penalty from grader
+            # Out-of-sequence: small positive penalty (clamped to valid range)
             step_reward = EmailTriageGrader.OUT_OF_SEQUENCE_PENALTY
+            step_reward = clamp_score(step_reward, f"step_reward[out_of_sequence]")
+            logger.warning(f"[OUT_OF_SEQUENCE] Step {self.current_state.step}: expected {expected_actions[self.current_state.step-1] if self.current_state.step-1 < len(expected_actions) else 'unknown'}, got {action_type}")
         else:
             # Use grader to compute reward based on difficulty and confidence
             step_reward = EmailTriageGrader.compute_step_reward(
@@ -428,6 +437,9 @@ class EmailTriageEnv:
                 action_type=action_type,
                 confidence=confidence,
             )
+        
+        # Ensure step_reward is always clamped (double-check)
+        step_reward = clamp_score(step_reward, f"step_reward[final_{self.current_state.step}]")
         
         self.current_state.reward = step_reward
         self.current_state.step_rewards.append(step_reward)
@@ -438,10 +450,17 @@ class EmailTriageEnv:
             "is_correct_sequence": is_correct_sequence,
         })
         
-        # Update cumulative score (normalized, only counting positive rewards)
-        # Validator requires scores strictly in range (0, 1), not [0, 1]
-        total_reward = sum(max(0.001, r) for r in self.current_state.step_rewards)
-        self.current_state.score = min(0.999, max(0.001, total_reward))  # Keep in (0.001, 0.999)
+        # Update cumulative score (clamped rewards sum)
+        # ALL rewards must be clamped at entry
+        total_reward = sum(self.current_state.step_rewards)
+        new_score = clamp_score(total_reward, f"score[summed_{self.current_state.step}_steps]")
+        
+        self.current_state.score = new_score
+        
+        # Validate final score
+        validation = EmailTriageGrader.validate_bounds(step_reward, new_score)
+        if not validation["all_valid"]:
+            logger.error(f"[VALIDATION FAILED] Step {self.current_state.step}: {validation}")
         
         # Check if episode is done
         done = (
