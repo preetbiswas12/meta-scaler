@@ -1,6 +1,6 @@
 # Email Triage OpenEnv - Project Overview
 
-**Status**: Active Development | **Phase**: Hackathon Submission (Meta PyTorch)
+**Status**: ✅ SUBMISSION READY | **Phase**: Hackathon Submission Complete (Meta PyTorch)
 
 ---
 
@@ -216,6 +216,170 @@ VALIDATOR READINESS TEST
 
 ---
 
+### **Phase 5: Schema Cleanup & Validator Compliance** ✅ COMPLETE
+
+**Problem**:
+- openenv.yaml had non-standard fields that weren't in Meta/Scaler spec
+- YAML structure contained redundant blocks causing schema validation to silently drop tasks
+- Version format didn't match spec standard
+
+**Root Causes**:
+1. `version: "1.0"` instead of standard `spec_version: 1`
+2. Redundant `graders:` and `metrics:` blocks conflicting with task-level graders
+3. Non-standard `grader_type: "deterministic"` field
+4. Shadow `config/openenv.yaml` file removed in Phase 4, but YAML structure still problematic
+
+**Solutions Implemented**:
+
+#### Updated openenv.yaml Schema
+```yaml
+# BEFORE
+version: "1.0"
+graders:
+  classification_grader: ...
+  threat_detection_grader: ...
+metrics:
+  accuracy: ...
+
+# AFTER
+spec_version: 1
+# (graders and metrics blocks REMOVED - now defined per-task only)
+
+tasks:
+  - id: "basic_email_classification"
+    grader: "src.graders_normalized:grade_basic_classification"
+    # No grader_type field
+```
+
+#### Docker PYTHONPATH Configuration
+Added environment variable to Dockerfile for proper module discovery:
+```dockerfile
+ENV PYTHONPATH="${PYTHONPATH}:/app"
+```
+
+**Result**: 
+- All 30 validation tests pass with cleaned schema
+- Commit: `cc3ddea`
+
+---
+
+### **Phase 6: Official OpenAI SDK Upgrade** ✅ COMPLETE
+
+**Requirement**:
+- Hackathon guidelines mandate: "You must use the OpenAI Client for all LLM calls"
+- Previous implementation used manual `requests` library
+
+**Problem**:
+- inference.py used raw `requests` library instead of official OpenAI SDK
+- Custom HTTP wrapping with `requests.post()` to `/chat/completions`
+- Non-compliance would fail automated validation
+
+**Solution Implemented**:
+
+#### Switched to Official OpenAI Client
+```python
+# BEFORE
+import requests
+
+def generate_email_action(self, system_prompt: str, user_prompt: str) -> str:
+    url = f"{self.base_url}/chat/completions"
+    headers = {"Authorization": f"Bearer {self.api_key}", ...}
+    payload = {"model": self.model_name, "messages": [...]}
+    resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    return resp.json()["choices"][0]["message"]["content"]
+
+# AFTER
+from openai import OpenAI
+
+def generate_email_action(self, system_prompt: str, user_prompt: str) -> str:
+    response = self.client.chat.completions.create(
+        model=self.model_name,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ],
+    )
+    content = response.choices[0].message.content
+    if content is None:
+        raise RuntimeError("API returned empty content")
+    return content
+```
+
+#### Updated requirements.txt
+```
++ openai>=1.0.0
+```
+
+**Benefits**:
+- Official library compliance (hackathon requirement)
+- Proper type safety with explicit null handling
+- All edge cases handled by official SDK
+- Cleaner, more maintainable code
+
+**Result**: 
+- All 30 validation tests still pass
+- Commit: `92d6148`
+
+---
+
+### **Phase 7: Port Alignment & Type Safety** ✅ COMPLETE
+
+**Problem 1 - Port Mismatch**:
+- openenv.yaml had `deployment.container.port: 8000`
+- Dockerfile had `EXPOSE 7860`
+- Hugging Face Spaces standard is port 7860
+- Validator couldn't connect to application
+
+**Problem 2 - Type Safety**:
+- Pylance reported type error: `"str | None" is not assignable to "str"`
+- OpenAI API response content could be `None` in edge cases
+- inference.py didn't explicitly handle null return
+
+**Solutions**:
+
+#### Port Alignment (Critical for Deployment)
+```yaml
+# BEFORE
+deployment:
+  container:
+    port: 8000
+
+# AFTER  
+deployment:
+  container:
+    port: 7860  # Aligned with Dockerfile EXPOSE 7860
+```
+
+#### Type Safety Fix
+```python
+# BEFORE (Pylance error)
+return response.choices[0].message.content  # Could be None
+
+# AFTER (Type safe)
+content = response.choices[0].message.content
+if content is None:
+    raise RuntimeError("API returned empty content")
+return content
+```
+
+**Alignment Verification**:
+| Component | Port | Status |
+|-----------|------|--------|
+| Dockerfile EXPOSE | 7860 | ✅ |
+| Dockerfile ENV PORT | 7860 | ✅ |
+| Gunicorn binding | 0.0.0.0:7860 | ✅ |
+| openenv.yaml deployment | 7860 | ✅ |
+| docker-compose.yml | 7860 | ✅ |
+
+**Result**:
+- Port 7860 consistent across all configuration files
+- No Pylance type errors
+- Deployment on Hugging Face Spaces compatible
+- All 30 validation tests pass
+- Commits: `a6a5398` (port fix), `21d839c` (type safety)
+
+---
+
 **Problem**:
 - Validator couldn't discover tasks
 - openenv.yaml had abstract grader IDs: `"classification_grader"`, `"threat_detection_grader"`, `"escalation_grader"`
@@ -383,9 +547,12 @@ python inference.py --task easy --steps 2
 | 2 | Task ID Mapping | ✅ Complete | TASK_ID_TO_DIFFICULTY added, reset() fixed |
 | 3 | Grader Paths | ✅ Complete | Module-level functions, openenv.yaml updated |
 | 4 | Validator Fixes | ✅ Complete | Shadow YAML removed, **kwargs added, readiness test created |
-| 5 | Pre-Submission Checklist | ✅ Complete | validate_submission.py: 30/30 tests passing |
-| — | Docker Build | ✅ Fixed | Removed config/ COPY directive |
-| — | Deployment | ✅ Pushed | GitHub & Hugging Face (commit `40c88b3`) |
+| 5 | Schema Cleanup | ✅ Complete | spec_version: 1, removed redundant blocks, PYTHONPATH added |
+| 6 | OpenAI SDK Upgrade | ✅ Complete | Official `openai>=1.0.0`, type-safe response handling |
+| 7 | Port Alignment | ✅ Complete | Port 7860 aligned across all configs, type safety fixes |
+| — | Pre-Submission Checklist | ✅ Complete | validate_submission.py: 30/30 tests passing |
+| — | Docker Build | ✅ Fixed | Removed config/ COPY directive, added PYTHONPATH |
+| — | Deployment | ✅ Pushed | GitHub & Hugging Face (commit `21d839c`) |
 
 ---
 
@@ -464,12 +631,27 @@ Your submission is ready for the validator.
   - `src.graders_normalized:grade_escalation_handling`
 
 ### inference.py
-- Changed OpenAIClient initialization from opt-in to always-on
+- Changed OpenAIClient initialization from opt-in to always-on (Phase 1)
 - Falls back to mock only if NO credentials available
 - Checks env vars: API_KEY → OPENAI_API_KEY → HF_TOKEN
+- **Phase 6**: Upgraded from `requests` library to official `openai>=1.0.0` SDK
+- **Phase 7**: Added type safety check for API response content (handle None case)
+
+### openenv.yaml
+- Updated task grader paths to full module paths (Phase 3)
+- **Phase 5**: Changed `version: "1.0"` to `spec_version: 1`
+- **Phase 5**: Removed redundant `graders:` and `metrics:` blocks
+- **Phase 5**: Removed non-standard `grader_type:` fields
+- **Phase 7**: Updated `deployment.container.port: 8000` → `7860`
+
+### Dockerfile
+- **Phase 5**: Added `ENV PYTHONPATH="${PYTHONPATH}:/app"` for module discovery
+
+### requirements.txt
+- **Phase 6**: Added `openai>=1.0.0` for official SDK
 
 ### docker-compose.yml
-- Added `API_KEY=${API_KEY:-}` environment variable
+- Added `API_KEY=${API_KEY:-}` environment variable (Phase 1)
 
 ### app.py
 - Changed `/episode` endpoint to use_llm default to 'true'
@@ -496,18 +678,65 @@ Your submission is ready for the validator.
 
 ---
 
-## 📞 Next Steps
+## � Submission Readiness Checklist
 
-1. Run local tests with `API_KEY` set
-2. Test grader path discovery with validator's schema validation
-3. Deploy to Hugging Face Spaces for validator execution
-4. Monitor validator logs for:
-   - ✓ Tasks discovered
-   - ✓ Graders called
-   - ✓ API calls tracked via proxy
+### Pre-Submission Requirements Met ✅
+
+**Schema & Configuration**:
+- ✅ `spec_version: 1` (not `version: "1.0"`)
+- ✅ All redundant blocks removed (no graders/metrics blocks)
+- ✅ All 3 tasks have required fields (id, difficulty, max_steps, grader, description)
+- ✅ Grader paths use full module paths (`src.module:function`)
+
+**API & Inference**:
+- ✅ Official OpenAI SDK in use (`openai>=1.0.0`)
+- ✅ Environment variables with proper defaults (API_BASE_URL, MODEL_NAME, HF_TOKEN)
+- ✅ [START]/[STEP]/[END] output format compliant
+
+**Deployment**:
+- ✅ Port alignment: 7860 across Docker, compose, and openenv.yaml
+- ✅ PYTHONPATH configured for module discovery
+- ✅ No conflicting shadow YAML files
+- ✅ Dockerfile cleaned and optimized
+
+**Validation**:
+- ✅ 30/30 pre-submission tests passing
+- ✅ All graders discoverable and callable
+- ✅ All rewards in bounds (0 < r < 1) exclusive
+- ✅ No Pylance type errors
+
+### Environment Variables (HuggingFace Secrets)
+
+Required for submission validation:
+
+```
+HF_TOKEN = <your-hugging-face-token>
+API_BASE_URL = https://api.openai.com/v1 (default, can be overridden)
+MODEL_NAME = gpt-3.5-turbo (default, can be overridden)
+```
+
+Configuration location: HuggingFace Space Settings → Secrets
+
+---
+
+## 📞 Submission Status
+
+✅ **All 7 phases complete and tested**  
+✅ **Port alignment verified**  
+✅ **OpenAI SDK compliance confirmed**  
+✅ **Type safety validated**  
+✅ **Deployment ready (GitHub & Hugging Face)**  
+✅ **30/30 pre-submission checks passing**
+
+**Ready to submit to Meta/Scaler OpenEnv Hackathon!** 🚀
 
 ---
 
 **Last Updated**: April 9, 2026  
-**Latest Commits**: `40c88b3` (comprehensive pre-submission validation added)  
-**Status**: ✅ SUBMISSION READY - 30/30 validation tests passing
+**Latest Commits**: 
+- `21d839c` - Type safety & Pylance fix
+- `92d6148` - OpenAI SDK upgrade
+- `a6a5398` - Port alignment
+- `cc3ddea` - Schema cleanup
+
+**Status**: ✅ SUBMISSION READY - All phases complete, 30/30 validation tests passing
