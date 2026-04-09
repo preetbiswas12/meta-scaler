@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, request, jsonify
 from src.environment import EmailTriageEnv, ActionSchema
+from src.graders_normalized import EmailTriageGrader
 from inference import OpenAIClient, run_inference_episode, TASK_GRADER_MAP
 
 # Configure logging
@@ -23,6 +24,34 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+
+# Initialize graders (one per task)
+_GRADERS = {
+    "easy_grader": {
+        "id": "easy_grader",
+        "task_id": "easy",
+        "name": "Easy Task Grader",
+        "type": "deterministic",
+        "grader_class": EmailTriageGrader,
+        "difficulty": "easy"
+    },
+    "medium_grader": {
+        "id": "medium_grader",
+        "task_id": "medium",
+        "name": "Medium Task Grader",
+        "type": "deterministic",
+        "grader_class": EmailTriageGrader,
+        "difficulty": "medium"
+    },
+    "hard_grader": {
+        "id": "hard_grader",
+        "task_id": "hard",
+        "name": "Hard Task Grader",
+        "type": "deterministic",
+        "grader_class": EmailTriageGrader,
+        "difficulty": "hard"
+    }
+}
 
 # Global state for per-user sessions (simple in-memory store)
 # In production, use Redis or persistent DB
@@ -195,6 +224,46 @@ def run_episode():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/graders", methods=["GET"])
+def list_graders():
+    """List all available graders and their task mappings."""
+    return jsonify({
+        "graders": [
+            {
+                "id": gid,
+                "task_id": g["task_id"],
+                "name": g["name"],
+                "type": g["type"],
+                "difficulty": g["difficulty"],
+            }
+            for gid, g in _GRADERS.items()
+        ],
+        "task_grader_map": TASK_GRADER_MAP,
+    }), 200
+
+
+@app.route("/graders/<grader_id>", methods=["GET"])
+def get_grader(grader_id: str):
+    """Get details about a specific grader."""
+    if grader_id not in _GRADERS:
+        return jsonify({"error": f"Grader {grader_id} not found"}), 404
+    
+    grader = _GRADERS[grader_id]
+    return jsonify({
+        "id": grader["id"],
+        "task_id": grader["task_id"],
+        "name": grader["name"],
+        "type": grader["type"],
+        "difficulty": grader["difficulty"],
+        "grader_class": "EmailTriageGrader",
+        "available_methods": [
+            "compute_step_reward(difficulty, step_number, action_type, confidence)",
+            "compute_final_score(step_rewards, num_steps)",
+            "validate_bounds(reward, score)",
+        ]
+    }), 200
+
+
 @app.route("/sessions", methods=["GET"])
 def list_sessions():
     """List all active sessions."""
@@ -246,12 +315,15 @@ def index():
         "version": "1.0.0",
         "endpoints": {
             "GET /health": "Health check",
+            "GET /graders": "List all graders (IMPORTANT: 3 tasks with graders)",
+            "GET /graders/<grader_id>": "Get specific grader details",
             "POST /reset": "Initialize environment (query: task_id=easy|medium|hard)",
             "POST /step": "Execute one step (body: {session_id, action})",
             "POST /episode": "Run complete episode (query: task_id, use_llm=true|false)",
             "GET /sessions": "List active sessions",
             "DELETE /sessions/<session_id>": "Delete session",
         },
+        "tasks_with_graders": TASK_GRADER_MAP,
         "example_action": {
             "action_type": "classify",
             "target_category": "sales_inquiry",
