@@ -14,12 +14,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-try:
-    import requests
-except ImportError:
-    print("[ERROR] requests not installed: pip install requests")
-    sys.exit(1)
-
+from openai import OpenAI
 from src.environment import EmailTriageEnv, ActionSchema
 from src.graders_normalized import clamp_score, EPSILON
 
@@ -36,48 +31,39 @@ class OpenAIClient:
     """OpenAI-compatible client for LLM inference."""
 
     def __init__(self):
-        # IMPORTANT: Use API_KEY injected by validator (LiteLLM proxy)
-        # Fall back to other env vars for local development
-        self.base_url = os.getenv("API_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+        # Read environment variables with defaults where required
+        self.base_url = os.getenv("API_BASE_URL", "https://api.openai.com/v1")
         self.model_name = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
+        
+        # HF_TOKEN is mandatory for submission validation
         self.api_key = (
             os.getenv("API_KEY") or  # Validator-injected key (priority)
             os.getenv("OPENAI_API_KEY") or  # Fallback: explicit OpenAI key
             os.getenv("HF_TOKEN")  # Fallback: HF token
         )
-        self.timeout = 30
 
         if not self.api_key:
             raise ValueError("API key not set (API_KEY, OPENAI_API_KEY, or HF_TOKEN required)")
 
-    def generate_email_action(self, system_prompt: str, user_prompt: str) -> str:
-        """Call LLM API and return response."""
-        url = f"{self.base_url}/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": self.model_name,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.7,
-            "max_tokens": 1000,
-        }
+        # Initialize official OpenAI client
+        self.client = OpenAI(
+            base_url=self.base_url,
+            api_key=self.api_key
+        )
 
+    def generate_email_action(self, system_prompt: str, user_prompt: str) -> str:
+        """Call LLM API using official OpenAI client and return response."""
         try:
-            resp = requests.post(url, json=payload, headers=headers, timeout=self.timeout)
-            resp.raise_for_status()
-            result = resp.json()
-            if "choices" not in result or not result["choices"]:
-                raise ValueError("No choices in response")
-            return result["choices"][0]["message"]["content"]
-        except requests.exceptions.ConnectionError as e:
-            raise RuntimeError(f"Connection error: {e}")
-        except requests.exceptions.Timeout:
-            raise RuntimeError(f"Timeout after {self.timeout}s")
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.7,
+                max_tokens=1000,
+            )
+            return response.choices[0].message.content
         except Exception as e:
             raise RuntimeError(f"API failed: {e}")
 
@@ -158,8 +144,9 @@ def run_inference_episode(
             action_type = action.get('action_type', 'unknown')
             
             # [STEP] log - REQUIRED FORMAT
-            error_msg = "null" if not last_error else f'"{last_error}"'
-            print(f"[STEP] step={step_num} action={action_type} reward={reward:.2f} done={'true' if done else 'false'} error={error_msg}", flush=True)
+            # Format: [STEP] step=<n> action=<action_str> reward=<0.00> done=<true|false> error=<msg|null>
+            error_field = "null" if not last_error else last_error
+            print(f"[STEP] step={step_num} action={action_type} reward={reward:.2f} done={'true' if done else 'false'} error={error_field}", flush=True)
 
             # Track if classification was correct (first step success indicator)
             if action.get("action_type") == "classify" and reward > 0:
@@ -169,11 +156,9 @@ def run_inference_episode(
                 break
 
         # [END] log - REQUIRED FORMAT
-        # Format: [END] success=<true|false> steps=<n> score=<score> rewards=<r1,r2,...,rn>
-        # Ensure final_score is clamped
-        final_score = clamp_score(final_score, "final_score[episode_end]")
+        # Format: [END] success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
         rewards_str = ",".join(f"{r:.2f}" for r in all_rewards)
-        print(f"[END] success={'true' if episode_success else 'false'} steps={step_count} score={final_score:.2f} rewards={rewards_str}", flush=True)
+        print(f"[END] success={'true' if episode_success else 'false'} steps={step_count} rewards={rewards_str}", flush=True)
 
         # Get grader ID for this task
         grader_id = TASK_GRADER_MAP.get(task_id, "unknown_grader")
@@ -193,15 +178,14 @@ def run_inference_episode(
 
     except Exception as e:
         # [END] log on error - REQUIRED FORMAT
-        error_score = clamp_score(0.5, "error_score")  # Default to 0.5 on error
-        print(f"[END] success=false steps={step_count} score={error_score:.2f} rewards={','.join(f'{r:.2f}' for r in all_rewards)}", flush=True)
+        # Format: [END] success=<true|false> steps=<n> rewards=<r1,r2,...,rn>
+        print(f"[END] success=false steps={step_count} rewards={','.join(f'{r:.2f}' for r in all_rewards)}", flush=True)
         grader_id = TASK_GRADER_MAP.get(task_id, "unknown_grader")
         return {
             "episode_id": episode_id,
             "task_id": task_id,
-            "grader_id": grader_id,  # Include grader even on error
+            "grader_id": grader_id,
             "error": str(e),
-            "final_score": error_score,  # Include clamped score on error
             "completed": False,
             "success": False,
         }
