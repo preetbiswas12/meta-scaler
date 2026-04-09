@@ -19,25 +19,25 @@ def clamp_score(score: float, label: str = "score") -> float:
 class EmailTriageGrader:
     """Deterministic grader for email triage with normalized bounds."""
 
-    # Step weights per difficulty as dicts (sum = 1.0)
+    # Step weights per difficulty as dicts (sum < 1.0 to avoid hitting exact 1.0)
     STEP_WEIGHTS = {
         "easy": {
-            "step_1": 0.33,
-            "step_2": 0.33,
-            "step_3": 0.34,
+            "step_1": 0.30,
+            "step_2": 0.30,
+            "step_3": 0.30,  # Sums to 0.90 (never hits 1.0)
         },
         "medium": {
-            "step_1": 0.25,
-            "step_2": 0.25,
-            "step_3": 0.25,
-            "step_4": 0.25,
-        },
-        "hard": {
             "step_1": 0.20,
             "step_2": 0.20,
             "step_3": 0.20,
-            "step_4": 0.20,
-            "step_5": 0.20,
+            "step_4": 0.20,  # Sums to 0.80 (never hits 1.0)
+        },
+        "hard": {
+            "step_1": 0.15,
+            "step_2": 0.15,
+            "step_3": 0.15,
+            "step_4": 0.15,
+            "step_5": 0.15,  # Sums to 0.75 (never hits 1.0)
         },
     }
 
