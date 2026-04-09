@@ -209,45 +209,51 @@ def run_inference_episode(
 
 
 def _get_mock_action(task_id: str, step_num: int) -> str:
-    """Get mock email action for testing without API."""
-    # Multi-step chains: classify → prioritize → reply/escalate → archive
-    actions = {
+    """Get mock email action for testing without API. Includes randomness for variance."""
+    import random
+    import json
+    
+    # Base actions (correct sequence)
+    base_actions = {
         "easy": [
-            # Step 1: Classify (identify type)
-            '{"action_type": "classify", "target_category": "sales_inquiry", "confidence": 0.95}',
-            # Step 2: Prioritize (set importance)
-            '{"action_type": "prioritize", "priority_level": 2, "confidence": 0.9}',
-            # Step 3: Archive (final action)
-            '{"action_type": "archive", "confidence": 0.85}',
+            {"action_type": "classify", "target_category": "sales_inquiry"},
+            {"action_type": "prioritize", "priority_level": 2},
+            {"action_type": "archive"},
         ],
         "medium": [
-            # Step 1: Classify (identify threat)
-            '{"action_type": "classify", "target_category": "phishing", "confidence": 0.98}',
-            # Step 2: Prioritize (mark high priority)
-            '{"action_type": "prioritize", "priority_level": 4, "confidence": 0.95}',
-            # Step 3: Reply
-            '{"action_type": "reply", "reply_draft": "Thank you for your email. We have received your inquiry and our technical team will investigate thoroughly. We will provide a detailed response within 24 hours.", "confidence": 0.85}',
-            # Step 4: Archive (final)
-            '{"action_type": "archive", "confidence": 0.8}',
+            {"action_type": "classify", "target_category": "phishing"},
+            {"action_type": "prioritize", "priority_level": 4},
+            {"action_type": "reply", "reply_draft": "Thank you for your email. We have received your inquiry."},
+            {"action_type": "archive"},
         ],
         "hard": [
-            # Step 1: Classify (identify critical issue)
-            '{"action_type": "classify", "target_category": "escalation_required", "confidence": 0.98}',
-            # Step 2: Prioritize (urgent)
-            '{"action_type": "prioritize", "priority_level": 5, "confidence": 0.99}',
-            # Step 3: Escalate (with reasoning)
-            '{"action_type": "escalate", "escalation_reason": "Critical customer complaint regarding data loss - requires immediate senior management review and legal team involvement", "confidence": 0.98}',
-            # Step 4: Reply (while escalating)
-            '{"action_type": "reply", "reply_draft": "We take your concern extremely seriously and treat this as our highest priority. Our entire technical and management team is investigating immediately. You will receive a detailed response within 24 hours.", "confidence": 0.9}',
-            # Step 5: Archive
-            '{"action_type": "archive", "confidence": 0.7}',
+            {"action_type": "classify", "target_category": "escalation_required"},
+            {"action_type": "prioritize", "priority_level": 5},
+            {"action_type": "escalate", "escalation_reason": "Critical issue requires senior review."},
+            {"action_type": "reply", "reply_draft": "We take this seriously."},
+            {"action_type": "archive"},
         ],
     }
     
-    step_actions = actions.get(task_id, [])
-    if step_num <= len(step_actions):
-        return step_actions[step_num - 1]
-    return '{"action_type": "archive", "confidence": 0.7}'
+    actions_list = base_actions.get(task_id, [])
+    
+    if step_num > len(actions_list):
+        return json.dumps({"action_type": "archive", "confidence": 0.7})
+    
+    base_action = actions_list[step_num - 1]
+    
+    # Add variance: 80% correct, 20% out-of-sequence or low confidence
+    if random.random() < 0.8:
+        # Correct action with variable confidence
+        confidence = random.uniform(0.7, 0.99)
+        base_action["confidence"] = confidence
+    else:
+        # Out-of-sequence: pick wrong action
+        wrong_idx = (step_num - 1 + random.randint(1, len(actions_list)-1)) % len(actions_list)
+        base_action = actions_list[wrong_idx].copy()
+        base_action["confidence"] = random.uniform(0.4, 0.7)
+    
+    return json.dumps(base_action)
 
 
 def _get_mock_action_dict(task_id: str, step_num: int) -> Dict[str, Any]:
