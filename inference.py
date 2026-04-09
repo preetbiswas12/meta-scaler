@@ -63,7 +63,10 @@ class OpenAIClient:
                 temperature=0.7,
                 max_tokens=1000,
             )
-            return response.choices[0].message.content
+            content = response.choices[0].message.content
+            if content is None:
+                raise RuntimeError("API returned empty content")
+            return content
         except Exception as e:
             raise RuntimeError(f"API failed: {e}")
 
