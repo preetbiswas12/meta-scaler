@@ -583,6 +583,219 @@ Your submission is ready for the validator.
 
 ---
 
+## ⚠️ CRITICAL Validator Requirements (Meta/Scaler)
+
+### 1. **STRICT Reward Bounds (0, 1) Exclusive** 🔴 CRITICAL
+
+**Requirement**: Every reward returned by grader functions **MUST be strictly between 0 and 1** (never exactly 0.0 or 1.0).
+
+**Why**: The validator's evaluation schema enforces `0 < reward < 1`. Returning 0.0 or 1.0 will cause automatic failure.
+
+**Implementation in src/graders_normalized.py**:
+```python
+# Epsilon for clamping to (0, 1) exclusive
+EPSILON = 1e-6
+
+def clamp_score(score: float, label: str = "score") -> float:
+    """Clamp score to (0, 1) exclusive using epsilon."""
+    # Clamp to (EPSILON, 1-EPSILON) = (0.000001, 0.999999)
+    return max(EPSILON, min(1.0 - EPSILON, float(score)))
+
+# All grader functions return clamped rewards
+def grade_basic_classification(action, email, ground_truth, **kwargs):
+    raw_reward, metadata = _grader_instance.grade_action(...)
+    return clamp_score(raw_reward), metadata  # ✅ Always in (0, 1)
+```
+
+**Verification**:
+```python
+# Every return must satisfy: 0 < reward < 1
+assert 0 < reward < 1, f"Invalid reward {reward}"
+```
+
+**Our Implementation**:
+- ✅ EPSILON = 1e-6 (even tighter than 0.01-0.99)
+- ✅ STEP_WEIGHTS sum to < 1.0 (never hit exact 1.0)
+- ✅ clamp_score applied to all returns
+- ✅ All 30/30 validation tests check this bound
+
+---
+
+### 2. **Clean YAML Schema** 🟡 IMPORTANT
+
+**Requirement**: openenv.yaml must have:
+- ✅ `spec_version: 1` (NOT `version: "1.0"`)
+- ✅ NO redundant `graders:` blocks at root level
+- ✅ NO redundant `metrics:` blocks
+- ✅ Task IDs in snake_case (no spaces, special chars)
+- ✅ Full module paths for graders: `src.graders_normalized:grade_*`
+
+**Current openenv.yaml** (Post-Phase 5):
+```yaml
+spec_version: 1                          # ✅ Correct format
+name: "email_triage"
+environment:
+  name: "EmailTriageEnv"
+  entry_point: "src.environment:EmailTriageEnv"
+  # ... state schema ...
+
+tasks:
+  - id: "basic_email_classification"     # ✅ snake_case
+    name: "Basic Email Classification"
+    difficulty: "easy"                    # ✅ Valid difficulty
+    grader: "src.graders_normalized:grade_basic_classification"  # ✅ Full path
+    max_steps: 3
+    
+  # ... 2 more tasks ...
+
+# ✅ NO graders: block (was causing silent task drops)
+# ✅ NO metrics: block
+# ✅ NO grader_type: fields
+```
+
+**Why This Matters**: Validators use strict schema validation. Invalid YAML structure causes tasks to be silently dropped without error messages.
+
+---
+
+### 3. **Hugging Face Secrets Configuration** 🟡 IMPORTANT
+
+**Required Secrets** in HuggingFace Space Settings → Secrets:
+
+| Variable | Purpose | Required | Default |
+|----------|---------|----------|---------|
+| `HF_TOKEN` | Hugging Face API token | ✅ YES | None |
+| `API_BASE_URL` | LLM endpoint | ❌ No | `https://api.openai.com/v1` |
+| `MODEL_NAME` | Model identifier | ❌ No | `gpt-3.5-turbo` |
+
+**Setup Steps**:
+1. Go to: https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE
+2. Click **Settings** → **Secrets and variables**
+3. Add `HF_TOKEN` = (get from https://huggingface.co/settings/tokens)
+4. Optional: Set `API_BASE_URL` if using validator's proxy
+
+**Without HF_TOKEN**: Validator cannot authenticate and submission fails.
+
+---
+
+### 4. **Final Pre-Submission Checklist** ✅
+
+Run these 5 checks before submitting:
+
+**Check 1: Reward Bounds Verification**
+```bash
+python -c "
+from src.graders_normalized import *
+env = EmailTriageEnv()
+
+for task in ['basic_email_classification', 'phishing_threat_detection', 'critical_escalation_handling']:
+    state = env.reset(task)
+    # Sample action
+    action = {'action_type': 'classify'}
+    state, reward, done, info = env.step(action)
+    assert 0 < reward < 1, f'FAIL: {task} returned {reward}'
+    print(f'✓ {task}: reward={reward:.6f}')
+"
+```
+
+**Check 2: YAML Schema Validation**
+```bash
+python -c "
+import yaml
+with open('openenv.yaml') as f:
+    cfg = yaml.safe_load(f)
+    
+assert cfg.get('spec_version') == 1, 'spec_version must be 1'
+assert 'graders' not in cfg, 'Remove graders: block'
+assert 'metrics' not in cfg, 'Remove metrics: block'
+assert len(cfg['tasks']) == 3, 'Must have exactly 3 tasks'
+
+for task in cfg['tasks']:
+    assert 'grader' in task, f'Task {task[\"id\"]} missing grader path'
+    assert ':' in task['grader'], f'Grader must be module:function format'
+    
+print('✓ YAML schema valid')
+"
+```
+
+**Check 3: Grader Paths Discoverable**
+```bash
+python -c "
+from importlib import import_module
+from src.environment import EmailTriageEnv
+
+env = EmailTriageEnv()
+for task_id in ['basic_email_classification', 'phishing_threat_detection', 'critical_escalation_handling']:
+    module_name, func_name = env.TASK_GRADER_MAP[task_id].split(':')
+    mod = import_module(module_name)
+    func = getattr(mod, func_name)
+    assert callable(func), f'{func_name} not callable'
+    print(f'✓ {task_id}: {func_name} discovered and callable')
+"
+```
+
+**Check 4: Port Alignment**
+```bash
+python -c "
+import yaml
+
+# Check openenv.yaml
+with open('openenv.yaml') as f:
+    cfg = yaml.safe_load(f)
+    port = cfg.get('deployment', {}).get('container', {}).get('port')
+    assert port == 7860, f'Port must be 7860, got {port}'
+
+# Check Dockerfile
+with open('Dockerfile') as f:
+    content = f.read()
+    assert 'EXPOSE 7860' in content, 'Dockerfile must EXPOSE 7860'
+    assert 'ENV PORT=7860' in content, 'Dockerfile must set ENV PORT=7860'
+
+print('✓ Port alignment verified: 7860 across all configs')
+"
+```
+
+**Check 5: Full Validation Suite**
+```bash
+python validate_submission.py
+# Expected: ✅ ALL CHECKS PASSED (30/30)
+```
+
+---
+
+## 🚀 Final Submission Steps
+
+1. **Verify All Checks Pass**
+   ```bash
+   python validate_submission.py  # Must see 30/30 PASS
+   ```
+
+2. **Set HuggingFace Secrets**
+   - HF_TOKEN (required)
+   - API_BASE_URL (optional)
+   - MODEL_NAME (optional)
+
+3. **Verify Space is Running**
+   - HuggingFace Space must be in "Running" state
+   - Build should complete without errors
+
+4. **Push Final Code**
+   ```bash
+   git push origin main
+   git push huggingface main
+   ```
+
+5. **Submit to Hackathon Portal**
+   - Provide GitHub repo link
+   - Provide HuggingFace Space URL
+   - Validator will:
+     - Inject API_KEY and API_BASE_URL
+     - Run inference.py 
+     - Check reward bounds (0 < r < 1)
+     - Verify grader discovery
+     - Track API calls through proxy
+
+---
+
 ---
 
 ## 🚀 Expected Validator Behavior
@@ -722,11 +935,22 @@ Configuration location: HuggingFace Space Settings → Secrets
 ## 📞 Submission Status
 
 ✅ **All 7 phases complete and tested**  
-✅ **Port alignment verified**  
-✅ **OpenAI SDK compliance confirmed**  
-✅ **Type safety validated**  
+✅ **Port alignment verified (7860 across all configs)**  
+✅ **OpenAI SDK compliance confirmed (official `openai>=1.0.0`)**  
+✅ **Type safety validated (no Pylance errors)**  
+✅ **Strict reward bounds enforced (0 < r < 1 with epsilon=1e-6)**  
+✅ **Clean YAML schema (spec_version: 1, no redundant blocks)**  
+✅ **Grader paths discoverable (src.graders_normalized:function)**  
 ✅ **Deployment ready (GitHub & Hugging Face)**  
-✅ **30/30 pre-submission checks passing**
+✅ **30/30 pre-submission checks passing**  
+
+**Critical Requirements Met**:
+- 🔴 **STRICT Reward Bounds**: All returns clamped to (0.000001, 0.999999) exclusive
+- 🟡 **YAML Schema**: spec_version=1, no graders/metrics blocks, snake_case IDs
+- 🟡 **HuggingFace Secrets**: HF_TOKEN configured and ready
+- ✅ **Port Alignment**: 7860 across Docker, compose, and openenv.yaml
+- ✅ **Type Safety**: No Pylance errors, proper null handling
+- ✅ **API Compliance**: Official OpenAI SDK in use
 
 **Ready to submit to Meta/Scaler OpenEnv Hackathon!** 🚀
 
@@ -734,9 +958,9 @@ Configuration location: HuggingFace Space Settings → Secrets
 
 **Last Updated**: April 9, 2026  
 **Latest Commits**: 
+- `c4a1d10` - Comprehensive documentation with validator guidance
 - `21d839c` - Type safety & Pylance fix
 - `92d6148` - OpenAI SDK upgrade
 - `a6a5398` - Port alignment
-- `cc3ddea` - Schema cleanup
 
-**Status**: ✅ SUBMISSION READY - All phases complete, 30/30 validation tests passing
+**Status**: ✅ SUBMISSION READY - All phases complete, critical requirements met, 30/30 validation tests passing

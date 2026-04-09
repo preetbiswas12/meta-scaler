@@ -295,8 +295,8 @@ class EmailTriageGrader:
             # Apply ambiguity bonus
             reward += ambiguity_bonus
         
-        # Ensure bounds
-        reward = max(0.0, min(1.0, reward))
+        # Ensure bounds - CRITICAL: Use clamp_score to enforce (0, 1) exclusive
+        reward = clamp_score(reward, f"grade_action[{difficulty}_step{step_number}]")
         
         return reward, {
             "metrics": {
