@@ -37,36 +37,36 @@ environment:
         description: "Episode completion flag"
 
 tasks:
-  - id: "easy"
-    name: "Basic Email Triage"
-    description: "Triage simple emails with straightforward actions"
+  - id: "basic_email_classification"
+    name: "Basic Email Classification"
+    description: "Classify simple emails (sales inquiries, newsletters, transactional). Focus on categorization accuracy."
     difficulty: "easy"
-    grader: "easy_grader"
+    grader: "classification_grader"
     grader_type: "deterministic"
     max_steps: 3
     
-  - id: "medium"
-    name: "Complex Email Handling"
-    description: "Handle complex emails requiring multiple actions and judgment"
+  - id: "phishing_threat_detection"
+    name: "Phishing Threat Detection"
+    description: "Detect phishing emails, urgent technical threats, and suspicious patterns. Multi-action handling required."
     difficulty: "medium"
-    grader: "medium_grader"
+    grader: "threat_detection_grader"
     grader_type: "deterministic"
     max_steps: 4
     
-  - id: "hard"
-    name: "Critical Issue Management"
-    description: "Handle critical emails requiring escalation and careful coordination"
+  - id: "critical_escalation_handling"
+    name: "Critical Escalation Handling"
+    description: "Handle critical issues requiring escalation, investigation, and coordination. Strategic decision-making required."
     difficulty: "hard"
-    grader: "hard_grader"
+    grader: "escalation_grader"
     grader_type: "deterministic"
     max_steps: 5
 
 graders:
-  - id: "easy_grader"
-    name: "Easy Task Grader"
+  - id: "classification_grader"
+    name: "Email Classification Grader"
     type: "deterministic"
-    description: "Grader for basic email triage tasks"
-    task_id: "easy"
+    description: "Evaluates email classification accuracy for basic emails"
+    task_id: "basic_email_classification"
     metrics:
       - name: "action_correctness"
         type: "boolean"
@@ -74,11 +74,11 @@ graders:
         type: "float"
         range: (0.0, 1.0)
     
-  - id: "medium_grader"
-    name: "Medium Task Grader"
+  - id: "threat_detection_grader"
+    name: "Threat Detection Grader"
     type: "deterministic"
-    description: "Grader for complex email handling tasks"
-    task_id: "medium"
+    description: "Evaluates phishing detection and threat response quality"
+    task_id: "phishing_threat_detection"
     metrics:
       - name: "action_correctness"
         type: "boolean"
@@ -89,11 +89,11 @@ graders:
         type: "float"
         range: (0.0, 1.0)
     
-  - id: "hard_grader"
-    name: "Hard Task Grader"
+  - id: "escalation_grader"
+    name: "Escalation Handling Grader"
     type: "deterministic"
-    description: "Grader for critical issue management tasks"
-    task_id: "hard"
+    description: "Evaluates critical issue escalation and coordination"
+    task_id: "critical_escalation_handling"
     metrics:
       - name: "action_correctness"
         type: "boolean"

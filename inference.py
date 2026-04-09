@@ -26,9 +26,9 @@ from src.graders_normalized import clamp_score, EPSILON
 
 # Task-to-Grader mapping (must match openenv.yaml)
 TASK_GRADER_MAP = {
-    "easy": "easy_grader",
-    "medium": "medium_grader",
-    "hard": "hard_grader",
+    "basic_email_classification": "classification_grader",
+    "phishing_threat_detection": "threat_detection_grader",
+    "critical_escalation_handling": "escalation_grader",
 }
 
 

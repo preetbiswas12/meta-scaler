@@ -54,10 +54,22 @@ class StateSchema(BaseModel):
 class EmailTriageEnv:
     """Email triage environment with multi-step reasoning."""
 
+    # Map actual task IDs to internal difficulty levels
+    TASK_ID_TO_DIFFICULTY = {
+        "basic_email_classification": "easy",
+        "phishing_threat_detection": "medium",
+        "critical_escalation_handling": "hard",
+        # Legacy aliases for backward compatibility
+        "easy": "easy",
+        "medium": "medium",
+        "hard": "hard",
+    }
+
     def __init__(self):
         """Initialize environment."""
         self.episode_id: Optional[str] = None
         self.task_id: Optional[str] = None
+        self.difficulty: Optional[str] = None
         self.current_state: Optional[StateSchema] = None
         self.difficulty_config = {
             "easy": {"max_steps": 3, "base_reward_per_step": 0.30},
@@ -197,26 +209,30 @@ class EmailTriageEnv:
         """Reset environment for a new episode."""
         import random
         
-        # Validate task_id
-        if task_id not in self.difficulty_config:
-            raise ValueError(f"Invalid task_id '{task_id}'. Must be one of: {list(self.difficulty_config.keys())}")
+        # Map task_id to difficulty level
+        difficulty = self.TASK_ID_TO_DIFFICULTY.get(task_id, "easy")
+        
+        # Validate mapped difficulty
+        if difficulty not in self.difficulty_config:
+            raise ValueError(f"Invalid task_id '{task_id}' maps to unknown difficulty '{difficulty}'. Must be one of: {list(self.difficulty_config.keys())}")
 
         self.task_id = task_id
+        self.difficulty = difficulty
         self.episode_id = str(uuid.uuid4())
         
-        config = self.difficulty_config[task_id]
-        email_list = self.email_bank.get(task_id, self.email_bank["easy"])
+        config = self.difficulty_config[difficulty]
+        email_list = self.email_bank.get(difficulty, self.email_bank["easy"])
         # Select random email from the list for variety
         current_email = random.choice(email_list) if email_list else {}
 
         # Initialize scores - must clamp to (EPSILON, 1-EPSILON)
-        initial_score = clamp_score(0.5, f"initial_score[{task_id}]")
-        initial_reward = clamp_score(0.5, f"initial_reward[{task_id}]")
+        initial_score = clamp_score(0.5, f"initial_score[{difficulty}]")
+        initial_reward = clamp_score(0.5, f"initial_reward[{difficulty}]")
 
         self.current_state = StateSchema(
             task_id=task_id,
             episode_id=self.episode_id,
-            difficulty=task_id,
+            difficulty=difficulty,
             step=0,
             max_steps=config["max_steps"],
             current_email=current_email,
@@ -225,7 +241,7 @@ class EmailTriageEnv:
             done=False,
             reward=initial_reward,  # Explicitly clamped
             step_rewards=[],
-            ground_truth=self._get_ground_truth(current_email, task_id),
+            ground_truth=self._get_ground_truth(current_email, difficulty),
         )
 
         return self._get_state_dict()
