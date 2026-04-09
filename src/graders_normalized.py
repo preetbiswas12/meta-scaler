@@ -309,3 +309,79 @@ class EmailTriageGrader:
             "step": step_number,
             "total_steps": total_steps,
         }
+
+
+# Module-level grading functions for validator exposure
+_grader_instance = EmailTriageGrader()
+
+
+def grade_action(
+    action: Any,
+    email: Dict[str, Any],
+    ground_truth: Dict[str, Any],
+    is_correct_sequence: bool = True,
+    step_number: int = 1,
+    total_steps: int = 3,
+    difficulty: str = "easy",
+) -> Tuple[float, Dict[str, Any]]:
+    """Grade an action using the email triage grader."""
+    return _grader_instance.grade_action(
+        action=action,
+        email=email,
+        ground_truth=ground_truth,
+        is_correct_sequence=is_correct_sequence,
+        step_number=step_number,
+        total_steps=total_steps,
+        difficulty=difficulty,
+    )
+
+
+def grade_basic_classification(
+    action: Any,
+    email: Dict[str, Any],
+    ground_truth: Dict[str, Any],
+    step_number: int = 1,
+) -> Tuple[float, Dict[str, Any]]:
+    """Grade action for basic email classification task."""
+    return grade_action(
+        action=action,
+        email=email,
+        ground_truth=ground_truth,
+        step_number=step_number,
+        total_steps=3,
+        difficulty="easy",
+    )
+
+
+def grade_phishing_detection(
+    action: Any,
+    email: Dict[str, Any],
+    ground_truth: Dict[str, Any],
+    step_number: int = 1,
+) -> Tuple[float, Dict[str, Any]]:
+    """Grade action for phishing threat detection task."""
+    return grade_action(
+        action=action,
+        email=email,
+        ground_truth=ground_truth,
+        step_number=step_number,
+        total_steps=4,
+        difficulty="medium",
+    )
+
+
+def grade_escalation_handling(
+    action: Any,
+    email: Dict[str, Any],
+    ground_truth: Dict[str, Any],
+    step_number: int = 1,
+) -> Tuple[float, Dict[str, Any]]:
+    """Grade action for critical escalation handling task."""
+    return grade_action(
+        action=action,
+        email=email,
+        ground_truth=ground_truth,
+        step_number=step_number,
+        total_steps=5,
+        difficulty="hard",
+    )

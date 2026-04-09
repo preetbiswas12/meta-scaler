@@ -41,7 +41,7 @@ tasks:
     name: "Basic Email Classification"
     description: "Classify simple emails (sales inquiries, newsletters, transactional). Focus on categorization accuracy."
     difficulty: "easy"
-    grader: "classification_grader"
+    grader: "src.graders_normalized:grade_basic_classification"
     grader_type: "deterministic"
     max_steps: 3
     
@@ -49,7 +49,7 @@ tasks:
     name: "Phishing Threat Detection"
     description: "Detect phishing emails, urgent technical threats, and suspicious patterns. Multi-action handling required."
     difficulty: "medium"
-    grader: "threat_detection_grader"
+    grader: "src.graders_normalized:grade_phishing_detection"
     grader_type: "deterministic"
     max_steps: 4
     
@@ -57,7 +57,7 @@ tasks:
     name: "Critical Escalation Handling"
     description: "Handle critical issues requiring escalation, investigation, and coordination. Strategic decision-making required."
     difficulty: "hard"
-    grader: "escalation_grader"
+    grader: "src.graders_normalized:grade_escalation_handling"
     grader_type: "deterministic"
     max_steps: 5
 
