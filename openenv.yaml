@@ -65,4 +65,4 @@ deployment:
     timeout: 300
   container:
     image: "python:3.11-slim"
-    port: 8000
+    port: 7860
