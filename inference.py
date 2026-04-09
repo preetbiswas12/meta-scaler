@@ -209,7 +209,7 @@ def run_inference_episode(
 
 
 def _get_mock_action(task_id: str, step_num: int) -> str:
-    """Get mock email action for testing without API. Includes randomness for variance."""
+    """Get mock email action for testing without API. Variance tuned by difficulty."""
     import random
     import json
     
@@ -242,16 +242,35 @@ def _get_mock_action(task_id: str, step_num: int) -> str:
     
     base_action = actions_list[step_num - 1]
     
-    # Add variance: 80% correct, 20% out-of-sequence or low confidence
-    if random.random() < 0.8:
-        # Correct action with variable confidence
-        confidence = random.uniform(0.7, 0.99)
+    # Difficulty-specific variance: easy is mostly correct, hard has more failures
+    if task_id == "easy":
+        # EASY: 85% high confidence (0.85-0.99), 15% medium confidence (0.65-0.80)
+        # Keeps it high (0.70-0.90 range) but with realistic variance
+        if random.random() < 0.85:
+            confidence = random.uniform(0.85, 0.99)
+        else:
+            confidence = random.uniform(0.65, 0.80)
         base_action["confidence"] = confidence
-    else:
-        # Out-of-sequence: pick wrong action
-        wrong_idx = (step_num - 1 + random.randint(1, len(actions_list)-1)) % len(actions_list)
-        base_action = actions_list[wrong_idx].copy()
-        base_action["confidence"] = random.uniform(0.4, 0.7)
+    elif task_id == "medium":
+        # MEDIUM: 70% correct (good confidence), 30% out-of-sequence or low confidence
+        if random.random() < 0.70:
+            confidence = random.uniform(0.75, 0.98)
+            base_action["confidence"] = confidence
+        else:
+            # Out-of-sequence or low confidence
+            wrong_idx = (step_num - 1 + random.randint(1, len(actions_list)-1)) % len(actions_list)
+            base_action = actions_list[wrong_idx].copy()
+            base_action["confidence"] = random.uniform(0.40, 0.70)
+    else:  # hard
+        # HARD: 60% correct, 40% out-of-sequence/low confidence (more struggle)
+        if random.random() < 0.60:
+            confidence = random.uniform(0.70, 0.95)
+            base_action["confidence"] = confidence
+        else:
+            # Out-of-sequence or low confidence
+            wrong_idx = (step_num - 1 + random.randint(1, len(actions_list)-1)) % len(actions_list)
+            base_action = actions_list[wrong_idx].copy()
+            base_action["confidence"] = random.uniform(0.30, 0.65)
     
     return json.dumps(base_action)
 
