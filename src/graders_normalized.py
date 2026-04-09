@@ -323,6 +323,7 @@ def grade_action(
     step_number: int = 1,
     total_steps: int = 3,
     difficulty: str = "easy",
+    **kwargs
 ) -> Tuple[float, Dict[str, Any]]:
     """Grade an action using the email triage grader."""
     return _grader_instance.grade_action(
@@ -341,6 +342,7 @@ def grade_basic_classification(
     email: Dict[str, Any],
     ground_truth: Dict[str, Any],
     step_number: int = 1,
+    **kwargs
 ) -> Tuple[float, Dict[str, Any]]:
     """Grade action for basic email classification task."""
     return grade_action(
@@ -358,6 +360,7 @@ def grade_phishing_detection(
     email: Dict[str, Any],
     ground_truth: Dict[str, Any],
     step_number: int = 1,
+    **kwargs
 ) -> Tuple[float, Dict[str, Any]]:
     """Grade action for phishing threat detection task."""
     return grade_action(
@@ -375,6 +378,7 @@ def grade_escalation_handling(
     email: Dict[str, Any],
     ground_truth: Dict[str, Any],
     step_number: int = 1,
+    **kwargs
 ) -> Tuple[float, Dict[str, Any]]:
     """Grade action for critical escalation handling task."""
     return grade_action(
