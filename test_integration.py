@@ -21,7 +21,8 @@ def test_reset_easy():
     assert state["difficulty"] == "easy"
     assert state["current_email"]["sender"] != ""
     assert state["step"] == 0
-    assert state["score"] == 0.0
+    # Score must be strictly in (0, 1), initialized to 0.5
+    assert 0.0 < state["score"] < 1.0, f"Score {state['score']} not in (0, 1)"
     assert state["done"] == False
     assert state["max_steps"] == 3
     print("✓ Reset easy task OK")

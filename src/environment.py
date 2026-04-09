@@ -209,12 +209,22 @@ class EmailTriageEnv:
         """Reset environment for a new episode."""
         import random
         
+        # Validate task_id exists in mapping (don't use default fallback)
+        if task_id not in self.TASK_ID_TO_DIFFICULTY:
+            raise ValueError(
+                f"Invalid task_id '{task_id}'. "
+                f"Must be one of: {list(self.TASK_ID_TO_DIFFICULTY.keys())}"
+            )
+        
         # Map task_id to difficulty level
-        difficulty = self.TASK_ID_TO_DIFFICULTY.get(task_id, "easy")
+        difficulty = self.TASK_ID_TO_DIFFICULTY[task_id]
         
         # Validate mapped difficulty
         if difficulty not in self.difficulty_config:
-            raise ValueError(f"Invalid task_id '{task_id}' maps to unknown difficulty '{difficulty}'. Must be one of: {list(self.difficulty_config.keys())}")
+            raise ValueError(
+                f"Invalid task_id '{task_id}' maps to unknown difficulty '{difficulty}'. "
+                f"Must be one of: {list(self.difficulty_config.keys())}"
+            )
 
         self.task_id = task_id
         self.difficulty = difficulty
@@ -466,10 +476,12 @@ class EmailTriageEnv:
             "is_correct_sequence": is_correct_sequence,
         })
         
-        # Update cumulative score (clamped rewards sum)
-        # ALL rewards must be clamped at entry
-        total_reward = sum(self.current_state.step_rewards)
-        new_score = clamp_score(total_reward, f"score[summed_{self.current_state.step}_steps]")
+        # Update cumulative score using EmailTriageGrader.compute_final_score
+        # This ensures proper normalization if sum exceeds 1.0
+        new_score = EmailTriageGrader.compute_final_score(
+            step_rewards=self.current_state.step_rewards,
+            num_steps=self.current_state.step
+        )
         
         self.current_state.score = new_score
         

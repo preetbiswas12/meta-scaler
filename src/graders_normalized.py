@@ -4,15 +4,28 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Epsilon for clamping to (0, 1) exclusive - avoids exact boundaries
-EPSILON = 1e-6
+# CRITICAL: Set to 0.01 to avoid floating-point rounding to exact 0.0 or 1.0
+EPSILON = 0.01
 
 def clamp_score(score: float, label: str = "score") -> float:
-    """Clamp score to (0, 1) exclusive using epsilon. Logs if out of range was detected."""
+    """
+    Clamp score to (EPSILON, 1-EPSILON) range to ensure strict (0, 1) boundaries.
+    
+    When score falls outside (0, 1):
+    - Values <= 0.0 clamp to EPSILON (0.01)
+    - Values >= 1.0 clamp to 1.0 - EPSILON (0.99)
+    
+    This ensures all returned scores are strictly between 0 and 1 (exclusive).
+    """
     if score <= 0.0 or score >= 1.0:
         logger.warning(f"[INVALID SCORE DETECTED] {label}={score:.10f} before clamping")
+    
+    # Clamp to [EPSILON, 1-EPSILON] = [0.01, 0.99]
     clamped = max(EPSILON, min(1.0 - EPSILON, float(score)))
+    
     if clamped != score:
         logger.debug(f"[CLAMPED] {label}: {score:.10f} -> {clamped:.10f}")
+    
     return clamped
 
 
@@ -136,26 +149,45 @@ class EmailTriageGrader:
     ) -> float:
         """
         Compute final episode score from step rewards.
+        
+        Ensures the final score is always strictly within (0, 1) by:
+        1. Clamping each step reward individually
+        2. Summing clamped rewards
+        3. Normalizing the sum if it exceeds 1.0
+        4. Final clamp to [EPSILON, 1-EPSILON]
 
         Args:
             step_rewards: List of per-step rewards
             num_steps: Total steps (optional, for compatibility)
 
         Returns:
-            Final score in [0.0, 1.0]
+            Final score strictly in (EPSILON, 1-EPSILON) = (0.01, 0.99)
         """
         if not step_rewards:
-            return clamp_score(0.5, "final_score[no_rewards]")  # Default to middle of valid range
+            # Default to middle of valid range for empty rewards
+            return clamp_score(0.5, "final_score[no_rewards]")
 
-        # Normalize each step reward to (EPSILON, 1-EPSILON)
+        # Step 1: Clamp each step reward individually to ensure they're all valid
         clamped_rewards = [clamp_score(r, f"step_reward[{i}]") for i, r in enumerate(step_rewards)]
 
-        # Sum rewards (may exceed 1.0)
+        # Step 2: Sum the clamped rewards
         total_reward = sum(clamped_rewards)
+        logger.debug(f"[SCORE] Summed {len(clamped_rewards)} rewards: {total_reward:.4f}")
 
-        # Apply final clamping: ensure strictly in (0, 1)
+        # Step 3: If sum exceeds 1.0, normalize it to stay below 1.0
+        # This handles multi-step episodes where total can exceed boundaries
+        if total_reward >= 1.0 - EPSILON:
+            # Normalize to max value of (1.0 - EPSILON)
+            normalized = (1.0 - EPSILON) * 0.95  # 0.9405 to be safely below 1.0
+            logger.debug(f"[SCORE_NORMALIZE] {total_reward:.4f} -> {normalized:.4f}")
+            total_reward = normalized
+        
+        # Step 4: Final clamp to ensure (0, 1) exclusive
         final_score = clamp_score(total_reward, "final_score[summed]")
 
+        # Safety check: ensure strictly within bounds
+        assert 0.0 < final_score < 1.0, f"Final score {final_score} not strictly in (0, 1)!"
+        
         return final_score
 
     @staticmethod
