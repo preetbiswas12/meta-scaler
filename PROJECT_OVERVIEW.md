@@ -383,8 +383,38 @@ python inference.py --task easy --steps 2
 | 2 | Task ID Mapping | ✅ Complete | TASK_ID_TO_DIFFICULTY added, reset() fixed |
 | 3 | Grader Paths | ✅ Complete | Module-level functions, openenv.yaml updated |
 | 4 | Validator Fixes | ✅ Complete | Shadow YAML removed, **kwargs added, readiness test created |
-| — | Tests | ✅ Passing | `test_validator_readiness.py` - all 4 tests pass |
-| — | Deployment | ✅ Pushed | GitHub & Hugging Face (commit `f909f28`) |
+| 5 | Pre-Submission Checklist | ✅ Complete | validate_submission.py: 30/30 tests passing |
+| — | Docker Build | ✅ Fixed | Removed config/ COPY directive |
+| — | Deployment | ✅ Pushed | GitHub & Hugging Face (commit `40c88b3`) |
+
+---
+
+## 🔍 Pre-Submission Validation (COMPREHENSIVE)
+
+**Run this before submitting:**
+```bash
+python validate_submission.py
+```
+
+Tests 6 critical categories with 30 assertions:
+
+| Category | Tests | Status |
+|----------|-------|--------|
+| PYTHONPATH & Package Structure | 1 | ✅ All Pass |
+| openenv.yaml Validation | 11 | ✅ All Pass |
+| Grader Path Discovery | 6 | ✅ All Pass |
+| Environment Initialization | 3 | ✅ All Pass |
+| Reward Bounds | 3 | ✅ All Pass |
+| Docker Configuration | 5 | ✅ All Pass |
+| **TOTAL** | **30** | **✅ All Pass** |
+
+**Expected Output:**
+```
+🎉 ALL CHECKS PASSED!
+Your submission is ready for the validator.
+```
+
+---
 
 ---
 
@@ -479,5 +509,5 @@ python inference.py --task easy --steps 2
 ---
 
 **Last Updated**: April 9, 2026  
-**Latest Commits**: `f909f28` (GitHub & Hugging Face)  
-**Status**: ✅ VALIDATOR READY - All tests passing
+**Latest Commits**: `40c88b3` (comprehensive pre-submission validation added)  
+**Status**: ✅ SUBMISSION READY - 30/30 validation tests passing
