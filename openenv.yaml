@@ -1,4 +1,4 @@
-version: "1.0"
+spec_version: 1
 name: "email_triage"
 description: "Multi-step email triage and classification environment"
 environment:
@@ -42,7 +42,6 @@ tasks:
     description: "Classify simple emails (sales inquiries, newsletters, transactional). Focus on categorization accuracy."
     difficulty: "easy"
     grader: "src.graders_normalized:grade_basic_classification"
-    grader_type: "deterministic"
     max_steps: 3
     
   - id: "phishing_threat_detection"
@@ -50,7 +49,6 @@ tasks:
     description: "Detect phishing emails, urgent technical threats, and suspicious patterns. Multi-action handling required."
     difficulty: "medium"
     grader: "src.graders_normalized:grade_phishing_detection"
-    grader_type: "deterministic"
     max_steps: 4
     
   - id: "critical_escalation_handling"
@@ -58,67 +56,7 @@ tasks:
     description: "Handle critical issues requiring escalation, investigation, and coordination. Strategic decision-making required."
     difficulty: "hard"
     grader: "src.graders_normalized:grade_escalation_handling"
-    grader_type: "deterministic"
     max_steps: 5
-
-graders:
-  - id: "classification_grader"
-    name: "Email Classification Grader"
-    type: "deterministic"
-    description: "Evaluates email classification accuracy for basic emails"
-    task_id: "basic_email_classification"
-    metrics:
-      - name: "action_correctness"
-        type: "boolean"
-      - name: "step_reward"
-        type: "float"
-        range: (0.0, 1.0)
-    
-  - id: "threat_detection_grader"
-    name: "Threat Detection Grader"
-    type: "deterministic"
-    description: "Evaluates phishing detection and threat response quality"
-    task_id: "phishing_threat_detection"
-    metrics:
-      - name: "action_correctness"
-        type: "boolean"
-      - name: "sequence_quality"
-        type: "float"
-        range: (0.0, 1.0)
-      - name: "step_reward"
-        type: "float"
-        range: (0.0, 1.0)
-    
-  - id: "escalation_grader"
-    name: "Escalation Handling Grader"
-    type: "deterministic"
-    description: "Evaluates critical issue escalation and coordination"
-    task_id: "critical_escalation_handling"
-    metrics:
-      - name: "action_correctness"
-        type: "boolean"
-      - name: "sequence_quality"
-        type: "float"
-        range: (0.0, 1.0)
-      - name: "reasoning_quality"
-        type: "float"
-        range: (0.0, 1.0)
-      - name: "step_reward"
-        type: "float"
-        range: (0.0, 1.0)
-
-metrics:
-  - name: "score"
-    type: "float"
-    range: (0.0, 1.0)
-  - name: "reward"
-    type: "float"
-    range: (0.0, 1.0)
-  - name: "step_count"
-    type: "integer"
-  - name: "actions_quality"
-    type: "float"
-    range: (0.0, 1.0)
 
 deployment:
   resources:

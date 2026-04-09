@@ -83,7 +83,7 @@ class ValidatorChecklist:
         self.log_pass("openenv.yaml is valid YAML")
         
         # Check required top-level fields
-        required_fields = ["version", "name", "description", "environment", "tasks"]
+        required_fields = ["spec_version", "name", "description", "environment", "tasks"]
         for field in required_fields:
             if field in config:
                 self.log_pass(f"Top-level field '{field}' present")
