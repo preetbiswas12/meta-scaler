@@ -209,70 +209,64 @@ def run_inference_episode(
 
 
 def _get_mock_action(task_id: str, step_num: int) -> str:
-    """Get mock email action for testing without API. Variance tuned by difficulty."""
+    """Generate realistic mock actions with proper sequence learning."""
     import random
     import json
     
-    # Base actions (correct sequence)
-    base_actions = {
-        "easy": [
-            {"action_type": "classify", "target_category": "sales_inquiry"},
-            {"action_type": "prioritize", "priority_level": 2},
-            {"action_type": "archive"},
-        ],
-        "medium": [
-            {"action_type": "classify", "target_category": "phishing"},
-            {"action_type": "prioritize", "priority_level": 4},
-            {"action_type": "reply", "reply_draft": "Thank you for your email. We have received your inquiry."},
-            {"action_type": "archive"},
-        ],
-        "hard": [
-            {"action_type": "classify", "target_category": "escalation_required"},
-            {"action_type": "prioritize", "priority_level": 5},
-            {"action_type": "escalate", "escalation_reason": "Critical issue requires senior review."},
-            {"action_type": "reply", "reply_draft": "We take this seriously."},
-            {"action_type": "archive"},
-        ],
+    # Expected ideal sequences
+    expected_sequences = {
+        "easy": ["classify", "prioritize", "archive"],
+        "medium": ["classify", "prioritize", "reply", "archive"],
+        "hard": ["classify", "prioritize", "investigate", "escalate", "reply"],
     }
     
-    actions_list = base_actions.get(task_id, [])
+    # All possible actions (for exploration)
+    all_actions = ["classify", "prioritize", "reply", "archive", "escalate", "investigate", "delegate"]
     
-    if step_num > len(actions_list):
-        return json.dumps({"action_type": "archive", "confidence": 0.7})
+    expected_seq = expected_sequences.get(task_id, expected_sequences["easy"])
     
-    base_action = actions_list[step_num - 1]
-    
-    # Difficulty-specific variance: easy is mostly correct, hard has more failures
+    # Realistic behavior: agent learns the sequence with difficulty
     if task_id == "easy":
-        # EASY: 85% high confidence (0.85-0.99), 15% medium confidence (0.65-0.80)
-        # Keeps it high (0.70-0.90 range) but with realistic variance
+        # Easy: 85% follows expected sequence with high confidence, 15% explores
         if random.random() < 0.85:
-            confidence = random.uniform(0.85, 0.99)
+            # Follow expected sequence
+            if step_num <= len(expected_seq):
+                action = expected_seq[step_num - 1]
+            else:
+                action = expected_seq[-1]  # Repeat last action if over steps
+            confidence = random.uniform(0.82, 0.99)
         else:
-            confidence = random.uniform(0.65, 0.80)
-        base_action["confidence"] = confidence
+            # Exploration
+            action = random.choice(all_actions)
+            confidence = random.uniform(0.45, 0.75)
     elif task_id == "medium":
-        # MEDIUM: 70% correct (good confidence), 30% out-of-sequence or low confidence
-        if random.random() < 0.70:
-            confidence = random.uniform(0.75, 0.98)
-            base_action["confidence"] = confidence
+        # Medium: 65% follows expected sequence, 35% explores/makes mistakes
+        if random.random() < 0.65:
+            if step_num <= len(expected_seq):
+                action = expected_seq[step_num - 1]
+            else:
+                action = expected_seq[-1]
+            confidence = random.uniform(0.68, 0.92)
         else:
-            # Out-of-sequence or low confidence
-            wrong_idx = (step_num - 1 + random.randint(1, len(actions_list)-1)) % len(actions_list)
-            base_action = actions_list[wrong_idx].copy()
-            base_action["confidence"] = random.uniform(0.40, 0.70)
+            action = random.choice(all_actions)
+            confidence = random.uniform(0.35, 0.70)
     else:  # hard
-        # HARD: 60% correct, 40% out-of-sequence/low confidence (more struggle)
-        if random.random() < 0.60:
-            confidence = random.uniform(0.70, 0.95)
-            base_action["confidence"] = confidence
+        # Hard: 55% follows expected sequence, 45% explores/struggles
+        if random.random() < 0.55:
+            if step_num <= len(expected_seq):
+                action = expected_seq[step_num - 1]
+            else:
+                action = expected_seq[-1]
+            confidence = random.uniform(0.62, 0.88)
         else:
-            # Out-of-sequence or low confidence
-            wrong_idx = (step_num - 1 + random.randint(1, len(actions_list)-1)) % len(actions_list)
-            base_action = actions_list[wrong_idx].copy()
-            base_action["confidence"] = random.uniform(0.30, 0.65)
+            action = random.choice(all_actions)
+            confidence = random.uniform(0.25, 0.65)
     
-    return json.dumps(base_action)
+    return json.dumps({
+        "action_type": action,
+        "target_category": random.choice(["sales", "phishing", "support", "escalation"]),
+        "confidence": confidence,
+    })
 
 
 def _get_mock_action_dict(task_id: str, step_num: int) -> Dict[str, Any]:
