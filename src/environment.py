@@ -41,9 +41,9 @@ class StateSchema(BaseModel):
     max_steps: int = 5
     current_email: Dict[str, Any]
     actions_taken: List[Dict[str, Any]] = Field(default_factory=list)
-    score: float = 0.0
+    score: float = 0.5  # Default to 0.5 (middle of valid range) - must be in (0, 1)
     done: bool = False
-    reward: float = 0.0
+    reward: float = 0.5  # Default to 0.5 (middle of valid range) - must be in (0, 1)
     ground_truth: Dict[str, Any] = Field(default_factory=dict)
     step_rewards: List[float] = Field(default_factory=list)
 
@@ -214,9 +214,9 @@ class EmailTriageEnv:
             max_steps=config["max_steps"],
             current_email=current_email,
             actions_taken=[],
-            score=0.0,
+            score=0.5,  # Initialize to 0.5 (middle of valid range) - must be in (0, 1)
             done=False,
-            reward=0.0,
+            reward=0.5,  # Initialize to 0.5 (middle of valid range) - must be in (0, 1)
             step_rewards=[],
             ground_truth=self._get_ground_truth(current_email, task_id),
         )
