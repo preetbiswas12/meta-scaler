@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from flask import Flask, request, jsonify
 from src.environment import EmailTriageEnv, ActionSchema
-from inference import OpenAIClient, run_inference_episode
+from inference import OpenAIClient, run_inference_episode, TASK_GRADER_MAP
 
 # Configure logging
 logging.basicConfig(

@@ -23,6 +23,14 @@ except ImportError:
 from src.environment import EmailTriageEnv, ActionSchema
 
 
+# Task-to-Grader mapping (must match openenv.yaml)
+TASK_GRADER_MAP = {
+    "easy": "easy_grader",
+    "medium": "medium_grader",
+    "hard": "hard_grader",
+}
+
+
 class OpenAIClient:
     """OpenAI-compatible client for LLM inference."""
 
@@ -161,9 +169,13 @@ def run_inference_episode(
         rewards_str = ",".join(f"{r:.2f}" for r in all_rewards)
         print(f"[END] success={'true' if episode_success else 'false'} steps={step_count} score={final_score:.2f} rewards={rewards_str}", flush=True)
 
+        # Get grader ID for this task
+        grader_id = TASK_GRADER_MAP.get(task_id, "unknown_grader")
+
         return {
             "episode_id": episode_id,
             "task_id": task_id,
+            "grader_id": grader_id,  # CRITICAL: Validator needs to see which grader evaluated this task
             "steps": step_count,
             "final_score": final_score,
             "total_reward": total_reward,
@@ -176,9 +188,11 @@ def run_inference_episode(
     except Exception as e:
         # [END] log on error - REQUIRED FORMAT
         print(f"[END] success=false steps={step_count} score=0.00 rewards={','.join(f'{r:.2f}' for r in all_rewards)}", flush=True)
+        grader_id = TASK_GRADER_MAP.get(task_id, "unknown_grader")
         return {
             "episode_id": episode_id,
             "task_id": task_id,
+            "grader_id": grader_id,  # Include grader even on error
             "error": str(e),
             "completed": False,
             "success": False,
